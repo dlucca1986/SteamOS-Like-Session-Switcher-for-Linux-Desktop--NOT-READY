@@ -1,73 +1,86 @@
 #!/bin/bash
 # =============================================================================
-# SteamOS-DIY - Universal Game Wrapper (sdy)
-# Version: 1.6.0 (Agnostic Edition)
+# SteamMachine-DIY - Universal Game Wrapper (sdy)
+# =============================================================================
+# Script: sdy
+# Version: 1.6.0
+# Description: Intelligent wrapper for Steam games. Handles per-game 
+#              configurations, command injection (prefixes/args), and 
+#              synchronizes diagnostic markers with Steam logs.
+# Repository: https://github.com/dlucca1986/SteamMachine-DIY
+# Path:        /usr/local/bin/sdy
+# License: MIT
 # =============================================================================
 
 set -eou pipefail
 
 # --- 1. CONFIGURATION & AGNOSTIC LOADING ---
+# Load the Master Global Configuration for system-wide paths and tags
 GLOBAL_CONFIG="/etc/default/steamos-diy"
 
 if [[ -f "$GLOBAL_CONFIG" ]]; then
     source "$GLOBAL_CONFIG"
 else
-    # Fallback se il file master manca (utile per compatibilità durante i test)
+    # Fallback paths for compatibility during standalone testing
     readonly LOG_FILE="/var/log/steamos-diy.log"
     readonly STEAM_LOG="$HOME/.local/share/Steam/logs/console-linux.txt"
     readonly GAMES_CONF_DIR="$HOME/.config/steamos-diy/games"
 fi
 
-# Variabili locali basate sul file Master
+# Local variables mapped from Master File or Fallbacks
 readonly LOG_FILE="${LOG_FILE}"
 readonly STEAM_LOG_PATH="${STEAM_LOG}"
 readonly CONF_DIR="${GAMES_CONF_DIR}"
 readonly GLOBAL_GAME_CONF="$CONF_DIR/global.conf"
 
+# Logging function using the system-wide LOG_TAG
 log() {
     local tag="$1"
     local msg="$2"
-    # Usa il LOG_TAG del file Master
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${LOG_TAG:-[SteamOS-DIY]} [$tag] $msg" >> "$LOG_FILE" 2>/dev/null || true
 }
 
-# Assicuriamoci che la cartella config esista (usando la variabile agnostica)
+# Ensure the configuration directory exists
 mkdir -p "$CONF_DIR"
 
 # --- 2. DYNAMIC TEMPLATE GENERATION ---
+# Create a global template if it doesn't exist
 if [[ ! -f "$GLOBAL_GAME_CONF" ]]; then
     echo -e "# Global settings for all games\nexport GAME_PRE_COMMAND=\"\"\nexport GAME_ARGS=\"\"" > "$GLOBAL_GAME_CONF"
 fi
 
-# Identificazione del gioco (logica originale perfetta)
+# Identify the game based on the launch path (the last argument from Steam)
 REAL_PATH="${@: -1}"
 FOLDER_NAME=$(basename "$(dirname "$REAL_PATH")")
 GAME_CONF="$CONF_DIR/${FOLDER_NAME}.conf"
 
+# Auto-generate a specific config template for the detected game
 if [[ ! -f "$GAME_CONF" ]]; then
     echo -e "# Specific settings for $FOLDER_NAME\nexport GAME_PRE_COMMAND=\"\"\nexport GAME_ARGS=\"\"" > "$GAME_CONF"
     log "WRAPPER" "Generated specific config for: $FOLDER_NAME"
 fi
 
-# --- 3. LOADING & CONCATENATION (Cumulative Logic) ---
+# --- 3. CONFIGURATION LOADING & CONCATENATION ---
+# Reset variables to ensure a clean state
 export GAME_PRE_COMMAND=""
 export GAME_ARGS=""
 
-# Carica Global
+# Load Global Settings
 source "$GLOBAL_GAME_CONF"
 G_PRE="$GAME_PRE_COMMAND"
 G_ARGS="$GAME_ARGS"
 
-# Carica Specific (reset prima del caricamento)
+# Reset and Load Game-Specific Settings
 export GAME_PRE_COMMAND=""
 export GAME_ARGS=""
 source "$GAME_CONF"
 
+# Combine Global and Specific commands
 FINAL_PRE="${G_PRE} ${GAME_PRE_COMMAND}"
 FINAL_ARGS="${GAME_ARGS} ${G_ARGS}"
 
-# --- 4. STEAM LOG SYNC MARKER ---
-# Cruciale per il Control Center: usa il percorso agnostico del log di Steam
+# --- 4. STEAM LOG SYNCHRONIZATION ---
+# Insert a marker in Steam's own logs to assist the DIY Control Center diagnostic
 touch "$STEAM_LOG_PATH" 2>/dev/null || true
 printf "\n--- SDY_REATTIVO_START: %s ---\n" "$FOLDER_NAME" >> "$STEAM_LOG_PATH" 2>/dev/null || true
 sync "$STEAM_LOG_PATH" 2>/dev/null || true
@@ -75,11 +88,12 @@ sync "$STEAM_LOG_PATH" 2>/dev/null || true
 # --- 5. EXECUTION ---
 log "LAUNCH" "Starting Game: $FOLDER_NAME"
 
+# Log injection details only if variables are not empty
 if [[ -n "${FINAL_PRE// /}" || -n "${FINAL_ARGS// /}" ]]; then
     log "ARGS" "Injection -> Prefix: [${FINAL_PRE:-NONE}] | Extra: [${FINAL_ARGS:-NONE}]"
 fi
 
 log "DEBUG" "Full Exec: $FINAL_PRE $@ $FINAL_ARGS"
 
-# Esecuzione professionale tramite 'env' con redirezione log
+# Execute the game using 'env' to handle prefixes correctly, redirecting errors to main log
 exec env $FINAL_PRE "$@" $FINAL_ARGS 2>> "$LOG_FILE"
