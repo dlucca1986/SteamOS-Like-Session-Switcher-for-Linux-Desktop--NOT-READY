@@ -1,6 +1,10 @@
 [Unit]
+# =============================================================================
+# SteamMachine-DIY - Game Mode Session Service
+# =============================================================================
 Description=SteamOS-DIY Game Mode for %i
 After=network.target systemd-user-sessions.service getty@tty1.service
+# Conflicts ensures that starting Game Mode automatically stops Desktop Mode
 Conflicts=steamos-desktop@%i.service getty@tty1.service
 
 [Service]
@@ -11,42 +15,43 @@ WorkingDirectory=/home/%i
 UtmpIdentifier=tty1
 UtmpMode=user
 
-# Carica le variabili dal file Master
+# Load Global Master Configuration
 EnvironmentFile=/etc/default/steamos-diy
 
-# Gestione TTY1 e LOG (Professionalizzazione)
+# TTY1 & Log Management
 StandardInput=tty
-# Reindirizziamo l'output al file di log centrale per la UI
+# Append output to the central log file for diagnostic UI
 StandardOutput=append:/var/log/steamos-diy.log
 StandardError=append:/var/log/steamos-diy.log
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
 
-# AMBIENTE AGNOSTICO (Calcolato dinamicamente)
-# Usiamo /run/user/$(id -u %i) invece di 1000 fisso
+# AGNOSTIC ENVIRONMENT SETTINGS
 Environment=DISPLAY=:0
 Environment=XDG_SESSION_TYPE=wayland
-#Environment=XDG_CURRENT_DESKTOP=gamescope
 
-# PULIZIA E FEEDBACK VISIVO
-#ExecStartPre=-/usr/bin/bash -c "echo '' > /dev/tty1 && echo '  ➔ Avvio Game Mode...' > /dev/tty1"
+# PRE-LAUNCH CLEANUP & VISUAL FEEDBACK
+# 1. Clear TTY1 for a clean transition
 ExecStartPre=-/usr/bin/bash -c "clear > /dev/tty1"
+# 2. Kill any process still holding TTY1
 ExecStartPre=-/usr/bin/fuser -k /dev/tty1
+# 3. Trigger the Game Mode Splash Screen
 ExecStartPre=-/usr/local/bin/steamos-helpers/steamos-splash game
-
-#ExecStartPre=-/usr/bin/fuser -k /dev/dri/card*
+# 4. Critical: Ensure the GPU (DRI) is free from previous sessions
 ExecStartPre=-/bin/sh -c 'if /usr/bin/fuser /dev/dri/card* >/dev/null 2>&1; then /usr/bin/fuser -k /dev/dri/card*; fi'
 
-# LANCIO
-#ExecStart=/usr/bin/dbus-run-session -- /usr/local/bin/steamos-session-launch
+# LAUNCH SEQUENCE
+# Executed via dbus-run-session to ensure a valid session bus for Gamescope/Steam
 ExecStart=/usr/bin/dbus-run-session -- /usr/bin/env KDE_FULL_SESSION=${KDE_FULL_SESSION} GTK_USE_PORTAL=${GTK_USE_PORTAL} /usr/local/bin/steamos-session-launch
 
-# GESTIONE ARRESTO
+# SESSION MANAGEMENT
 Restart=no
 KillMode=mixed
 KillSignal=SIGTERM
+# Short timeout for faster transitions between modes
 TimeoutStopSec=500ms
 
 [Install]
+# Hook into the graphical target sequence
 WantedBy=graphical.target
