@@ -41,6 +41,9 @@ While the project remains hardware-agnostic by design (supporting both **AMD and
 * **🎮 Universal Game Wrapper (sdy)**:
   A powerful injection tool for your games. Add custom prefixes, or extra arguments globally or on a per-game basis.
 
+* **🛠️ SteamMachine-DIY Control Center (sdy companion)**:
+  Python-based utility that acts as the brain of the system. It orchestrates hardware configurations, manages the Safe Mode state, and provides a bridge between the system services and the user interface.
+  
 ---
 
 ## 🛡️ Clean Architecture & Safety
