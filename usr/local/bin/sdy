@@ -3,7 +3,7 @@
 # SteamMachine-DIY - Universal Game Wrapper (sdy)
 # =============================================================================
 # Script: sdy
-# Version: 1.6.0
+# Version: 3.1.0
 # Description: Intelligent wrapper for Steam games. Handles per-game 
 #              configurations, command injection (prefixes/args), and 
 #              synchronizes diagnostic markers with Steam logs.
