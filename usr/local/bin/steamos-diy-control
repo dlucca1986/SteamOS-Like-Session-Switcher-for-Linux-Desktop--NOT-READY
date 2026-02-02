@@ -1,0 +1,414 @@
+import sys
+import os
+import subprocess
+import re
+import getpass
+import socket
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                             QHBoxLayout, QLabel, QLineEdit, QPushButton,
+                             QFrame, QTextEdit, QTabWidget, QGridLayout,
+                             QListWidget, QCompleter)
+from PyQt6.QtCore import Qt, QTimer, QRegularExpression
+from PyQt6.QtGui import QPalette, QFont, QSyntaxHighlighter, QTextCharFormat, QColor
+
+# --- PATHS AND CONFIGURATION ---
+def get_master_config():
+    master_path = "/etc/default/steamos-diy"
+    config = {
+        "CONF_DIR": os.path.expanduser("~/.config/steamos-diy"),
+        "GAMES_CONF_DIR": os.path.expanduser("~/.config/steamos-diy/games"),
+        "LOG_FILE": "/var/log/steamos-diy.log",
+        "STEAM_LOG": os.path.expanduser("~/.local/share/Steam/logs/console-linux.txt")
+    }
+    if os.path.exists(master_path):
+        try:
+            with open(master_path, "r") as f:
+                for line in f:
+                    if "=" in line and not line.startswith("#"):
+                        key, val = line.split("=", 1)
+                        clean_val = val.strip().strip('"').strip("'")
+                        if clean_val:
+                            if key.strip() == "CONF_DIR": config["CONF_DIR"] = clean_val
+                            elif key.strip() == "GAMES_CONF_DIR": config["GAMES_CONF_DIR"] = clean_val
+                            elif key.strip() == "LOG_FILE": config["LOG_FILE"] = clean_val
+                            elif key.strip() == "STEAM_LOG": config["STEAM_LOG"] = clean_val
+        except: pass
+    return config
+
+MASTER = get_master_config()
+CONFIG_DIR = MASTER["CONF_DIR"]
+GAMES_CONF_DIR = MASTER["GAMES_CONF_DIR"]
+CONFIG_PATH = os.path.join(CONFIG_DIR, "config")
+CONFIG_EXAMPLE_PATH = os.path.join(CONFIG_DIR, "config.example")
+SDY_EXAMPLE_PATH = os.path.join(GAMES_CONF_DIR, "sdy.example")
+LOG_PATH = MASTER["LOG_FILE"]
+STEAM_LOG = MASTER["STEAM_LOG"]
+
+SUGGESTIONS = [
+    "width", "height", "refresh", "fps-limit", "fsr", "nis", "sharpness",
+    "rt", "prefer-output", "hdr-enabled", "force-composition",
+    "GAMESCOPE_COMMAND", "ENABLE_VULKAN", "STEAM_COMPAT_DATA_PATH",
+    "MESA_DISK_CACHE_SINGLE_FILE", "vblank_mode", "mangohud"
+]
+
+# --- HIGHLIGHTERS ---
+class ConfHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.rules = []
+        palette = QApplication.palette()
+        color_accent = palette.color(QPalette.ColorRole.Highlight)
+        color_text = palette.color(QPalette.ColorRole.Text)
+        color_comment = palette.color(QPalette.ColorRole.PlaceholderText)
+
+        fmt_k = QTextCharFormat(); fmt_k.setForeground(color_accent); fmt_k.setFontWeight(QFont.Weight.Bold)
+        self.rules.append((QRegularExpression(r"^[A-Za-z0-9_]+(?==)"), fmt_k))
+
+        fmt_n = QTextCharFormat(); fmt_n.setForeground(color_text); fmt_n.setFontWeight(QFont.Weight.Bold)
+        self.rules.append((QRegularExpression(r"\b[0-9]+\b"), fmt_n))
+
+        fmt_v = QTextCharFormat(); fmt_v.setForeground(color_text)
+        self.rules.append((QRegularExpression(r"(?<==).+"), fmt_v))
+
+        fmt_c = QTextCharFormat(); fmt_c.setForeground(color_comment); fmt_c.setFontItalic(True)
+        self.rules.append((QRegularExpression(r"#.*"), fmt_c))
+
+    def highlightBlock(self, text):
+        for pattern, fmt in self.rules:
+            it = pattern.globalMatch(text)
+            while it.hasNext():
+                match = it.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
+
+class LogHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.rules = []
+        palette = QApplication.palette()
+        color_accent = palette.color(QPalette.ColorRole.Highlight)
+        color_dim = palette.color(QPalette.ColorRole.PlaceholderText)
+
+        fmt_err = QTextCharFormat(); fmt_err.setForeground(QColor("#e74c3c")); fmt_err.setFontWeight(QFont.Weight.Bold)
+        fmt_warn = QTextCharFormat(); fmt_warn.setForeground(QColor("#f1c40f"))
+        fmt_info = QTextCharFormat(); fmt_info.setForeground(color_accent)
+        fmt_date = QTextCharFormat(); fmt_date.setForeground(color_dim)
+        fmt_tag = QTextCharFormat(); fmt_tag.setForeground(color_accent); fmt_tag.setFontWeight(QFont.Weight.Bold)
+
+        self.rules.append((QRegularExpression(r"\[ERROR\]|CRITICAL|FAILED|failed|Error"), fmt_err))
+        self.rules.append((QRegularExpression(r"\[Warn\]|WARNING|Warn"), fmt_warn))
+        self.rules.append((QRegularExpression(r"\[LAUNCH\]|\[Info\]|gamescope|wlserver"), fmt_info))
+        self.rules.append((QRegularExpression(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"), fmt_date))
+        self.rules.append((QRegularExpression(r"\[[A-Z_]+\]"), fmt_tag))
+
+    def highlightBlock(self, text):
+        for pattern, fmt in self.rules:
+            it = pattern.globalMatch(text)
+            while it.hasNext():
+                match = it.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
+
+class SmartTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._completer = QCompleter(SUGGESTIONS)
+        self._completer.setWidget(self)
+        self._completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self._completer.activated.connect(self.insert_completion)
+
+    def insert_completion(self, completion):
+        tc = self.textCursor()
+        extra = len(completion) - len(self._completer.completionPrefix())
+        tc.movePosition(tc.MoveOperation.Left)
+        tc.movePosition(tc.MoveOperation.EndOfWord)
+        tc.insertText(completion[-extra:])
+        self.setTextCursor(tc)
+
+    def text_under_cursor(self):
+        tc = self.textCursor()
+        tc.select(tc.SelectionType.WordUnderCursor)
+        return tc.selectedText()
+
+    def keyPressEvent(self, event):
+        if self._completer.popup().isVisible():
+            if event.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return, Qt.Key.Key_Escape, Qt.Key.Key_Tab):
+                event.ignore()
+                return
+        super().keyPressEvent(event)
+        prefix = self.text_under_cursor()
+        if prefix:
+            self._completer.setCompletionPrefix(prefix)
+            cr = self.cursorRect()
+            cr.setWidth(self._completer.popup().sizeHintForColumn(0) + self._completer.popup().verticalScrollBar().sizeHint().width())
+            self._completer.complete(cr)
+        else:
+            self._completer.popup().hide()
+
+# --- MAIN WINDOW ---
+class SteamDIYControl(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("SteamOS-DIY Control Center")
+        self.setMinimumSize(1000, 800)
+
+        # Agnostic Info
+        self.curr_user = getpass.getuser()
+        self.curr_host = socket.gethostname()
+
+        self.init_ui()
+        self.load_main_config()
+        self.refresh_games_list()
+
+    def run_cmd(self, cmd):
+        try: return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL).strip()
+        except: return "N/A"
+
+    def init_ui(self):
+        palette = self.palette()
+        accent_hex = palette.color(QPalette.ColorRole.Highlight).name()
+
+        central = QWidget(); self.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+        self.tabs = QTabWidget(); layout.addWidget(self.tabs)
+
+        # TAB 1: GAMESCOPE
+        self.tab_gs = QWidget(); gs_lay = QVBoxLayout(self.tab_gs)
+        gs_head = QHBoxLayout()
+        self.gs_title = QLabel(f"Main Config: {CONFIG_PATH}")
+        self.gs_title.setStyleSheet(f"color: {accent_hex}; font-weight: bold;")
+        self.gs_ex_btn = QPushButton(" Open Example")
+        self.gs_ex_btn.clicked.connect(self.toggle_main_example)
+        gs_head.addWidget(self.gs_title); gs_head.addStretch(); gs_head.addWidget(self.gs_ex_btn)
+
+        self.gs_edit = SmartTextEdit()
+        self.gs_edit.setFont(QFont("Monospace", 10))
+        self.gs_highlighter = ConfHighlighter(self.gs_edit.document())
+        self.gs_save_btn = QPushButton(" Save Main Config")
+        self.gs_save_btn.clicked.connect(self.save_main_config)
+        self.gs_save_btn.setMinimumHeight(40)
+
+        gs_lay.addLayout(gs_head); gs_lay.addWidget(self.gs_edit); gs_lay.addWidget(self.gs_save_btn)
+        self.tabs.addTab(self.tab_gs, "Gamescope")
+
+        # TAB 2: SYSTEM INFO
+        self.tab_info = QWidget(); info_lay = QVBoxLayout(self.tab_info)
+        cols = QHBoxLayout(); self.sw_labels = {}; self.hw_labels = {}
+        for title, container, keys in [("SOFTWARE", self.sw_labels, ["OS", "Kernel", "Session"]),
+                                       ("HARDWARE", self.hw_labels, ["CPU", "GPU", "Memory Usage"])]:
+            vbox = QVBoxLayout(); vbox.addWidget(QLabel(f"<b>{title}</b>"))
+            frame = QFrame(); frame.setFrameShape(QFrame.Shape.StyledPanel); grid = QGridLayout(frame)
+            for i, k in enumerate(keys):
+                grid.addWidget(QLabel(f"{k}:"), i, 0)
+                val = QLabel("..."); container[k] = val; grid.addWidget(val, i, 1)
+            vbox.addWidget(frame); cols.addLayout(vbox)
+        info_lay.addLayout(cols)
+
+        self.gpu_log = QTextEdit(); self.gpu_log.setReadOnly(True); self.gpu_log.setFont(QFont("Monospace", 9))
+        info_lay.addWidget(QLabel("<b>DETAILED PCI DEVICES</b>")); info_lay.addWidget(self.gpu_log)
+        self.tabs.addTab(self.tab_info, "System Info")
+
+        # TAB 3: CONSOLE (AGNOSTIC NATIVE BRIDGE)
+        self.tab_console = QWidget(); console_lay = QVBoxLayout(self.tab_console)
+
+        self.console_info = QLabel("The terminal below is a native shell bridge to the operating system.\n"
+                                   "It supports ANSI colors, Tab-completion, and interactive commands.")
+        self.console_info.setWordWrap(True)
+        self.console_info.setStyleSheet("color: gray; margin-bottom: 10px;")
+
+        self.console_out = QTextEdit(); self.console_out.setReadOnly(True)
+        self.console_out.setFont(QFont("Monospace", 10))
+        self.console_out.setStyleSheet("background-color: #1e1e1e; color: #ffffff; border: 1px solid #333;")
+
+        console_input_lay = QHBoxLayout()
+        self.console_prompt_lbl = QLabel(f"<b>{self.curr_user}@{self.curr_host}:~$</b>")
+        self.console_prompt_lbl.setStyleSheet(f"color: {accent_hex};")
+
+        self.console_input = QLineEdit()
+        self.console_input.setPlaceholderText("Run command (e.g. htop, ls -la, vulkaninfo)...")
+        self.console_input.returnPressed.connect(self.execute_console_command)
+
+        self.btn_full_term = QPushButton("Open External Terminal")
+        self.btn_full_term.clicked.connect(self.open_native_terminal)
+
+        console_input_lay.addWidget(self.console_prompt_lbl)
+        console_input_lay.addWidget(self.console_input)
+        console_input_lay.addWidget(self.btn_full_term)
+
+        console_lay.addWidget(QLabel("<b>DIAGNOSTIC SHELL BRIDGE</b>"))
+        console_lay.addWidget(self.console_info)
+        console_lay.addWidget(self.console_out)
+        console_lay.addLayout(console_input_lay)
+        self.tabs.addTab(self.tab_console, "Console")
+
+        # TAB 4: SDY CONFIG
+        self.tab_sdy = QWidget(); sdy_lay = QHBoxLayout(self.tab_sdy)
+        side = QVBoxLayout()
+        self.btn_target = QPushButton("Target Last Game"); self.btn_target.clicked.connect(self.target_last_game)
+        self.games_list = QListWidget(); self.games_list.setFixedWidth(220)
+        self.games_list.itemClicked.connect(self.load_selected_game_conf)
+        side.addWidget(self.btn_target); side.addWidget(self.games_list)
+
+        editor_side = QVBoxLayout()
+        edit_head = QHBoxLayout()
+        self.sdy_curr_lbl = QLabel("Select a game...")
+        self.sdy_curr_lbl.setStyleSheet(f"color: {accent_hex}; font-weight: bold;")
+        self.sdy_ex_btn = QPushButton(" Open Example")
+        self.sdy_ex_btn.clicked.connect(self.toggle_sdy_example)
+        edit_head.addWidget(self.sdy_curr_lbl); edit_head.addStretch(); edit_head.addWidget(self.sdy_ex_btn)
+
+        self.sdy_edit = SmartTextEdit()
+        self.sdy_edit.setFont(QFont("Monospace", 10))
+        self.sdy_highlighter = ConfHighlighter(self.sdy_edit.document())
+        self.sdy_save_btn = QPushButton(" Save Game Config")
+        self.sdy_save_btn.clicked.connect(self.save_sdy_conf)
+
+        editor_side.addLayout(edit_head); editor_side.addWidget(self.sdy_edit); editor_side.addWidget(self.sdy_save_btn)
+        sdy_lay.addLayout(side); sdy_lay.addLayout(editor_side)
+        self.tabs.addTab(self.tab_sdy, "Sdy Config")
+
+        # TAB 5: SYSTEM LOGS
+        self.tab_logs = QWidget(); log_lay = QVBoxLayout(self.tab_logs)
+        l_tools = QHBoxLayout()
+        self.copy_btn = QPushButton(" Copy All"); self.copy_btn.clicked.connect(self.copy_to_clipboard)
+        self.clear_btn = QPushButton(" Clear Log"); self.clear_btn.clicked.connect(self.clear_log)
+        self.log_search = QLineEdit(); self.log_search.setPlaceholderText("Filter logs...")
+        self.log_search.textChanged.connect(self.load_log_content)
+        l_tools.addWidget(self.copy_btn); l_tools.addWidget(self.clear_btn); l_tools.addStretch(); l_tools.addWidget(QLabel("Filter:")); l_tools.addWidget(self.log_search)
+        log_lay.addLayout(l_tools)
+
+        self.log_out = QTextEdit(); self.log_out.setReadOnly(True); self.log_out.setFont(QFont("Monospace", 10))
+        self.log_highlighter = LogHighlighter(self.log_out.document())
+        log_lay.addWidget(self.log_out)
+        self.tabs.addTab(self.tab_logs, "System Logs")
+
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+        self.dyn_timer = QTimer(); self.dyn_timer.timeout.connect(self.update_dynamic_info)
+        self.dyn_timer.start(3000); self.update_system_info()
+
+    # --- CONSOLE LOGIC (NATIVE) ---
+    def execute_console_command(self):
+        cmd = self.console_input.text().strip()
+        if not cmd: return
+
+        # Show native prompt in output
+        self.console_out.append(f"<span style='color:cyan;'><b>{self.curr_user}@{self.curr_host}:~$</b></span> {cmd}")
+
+        # Real execution with output capture
+        try:
+            result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+            output = result.stdout if result.stdout else result.stderr
+            if output:
+                # Basic cleaning of ANSI escape codes for readability in QTextEdit
+                clean_output = re.sub(r'\x1b\[[0-9;]*[mK]', '', output)
+                self.console_out.append(f"<span style='color:#ffffff;'>{clean_output}</span>")
+        except Exception as e:
+            self.console_out.append(f"<span style='color:#ff5555;'>Error: {str(e)}</span>")
+
+        self.console_input.clear()
+        self.console_out.verticalScrollBar().setValue(self.console_out.verticalScrollBar().maximum())
+
+    def open_native_terminal(self):
+        # Bridge solution: open the system terminal
+        for term in ["konsole", "gnome-terminal", "xfce4-terminal", "xterm"]:
+            try:
+                subprocess.Popen([term], start_new_session=True)
+                return
+            except: continue
+
+    # --- MAIN CONFIG LOGIC ---
+    def load_main_config(self):
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, "r") as f: self.gs_edit.setPlainText(f.read())
+        self.gs_title.setText(f"Main Config: {CONFIG_PATH}")
+        self.gs_ex_btn.setText(" Open Example")
+
+    def toggle_main_example(self):
+        if "Example" in self.gs_ex_btn.text():
+            if os.path.exists(CONFIG_EXAMPLE_PATH):
+                with open(CONFIG_EXAMPLE_PATH, "r") as f: self.gs_edit.setPlainText(f.read())
+                self.gs_title.setText("Viewing: config.example (Read-only)")
+                self.gs_ex_btn.setText(" Back to Config")
+        else: self.load_main_config()
+
+    def save_main_config(self):
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        with open(CONFIG_PATH, "w") as f: f.write(self.gs_edit.toPlainText())
+        self.gs_save_btn.setText(" Saved!"); QTimer.singleShot(2000, lambda: self.gs_save_btn.setText(" Save Main Config"))
+
+    # --- SDY CONFIG LOGIC ---
+    def refresh_games_list(self):
+        self.games_list.clear()
+        if not os.path.exists(GAMES_CONF_DIR): os.makedirs(GAMES_CONF_DIR, exist_ok=True)
+        for f in sorted([f for f in os.listdir(GAMES_CONF_DIR) if f.endswith(".conf")]): self.games_list.addItem(f)
+
+    def load_selected_game_conf(self, item):
+        if not item: return
+        self.sdy_curr_lbl.setText(f"Editing: {item.text()}")
+        with open(os.path.join(GAMES_CONF_DIR, item.text()), "r") as f: self.sdy_edit.setPlainText(f.read())
+        self.sdy_ex_btn.setText(" Open Example")
+
+    def toggle_sdy_example(self):
+        if "Example" in self.sdy_ex_btn.text():
+            if os.path.exists(SDY_EXAMPLE_PATH):
+                with open(SDY_EXAMPLE_PATH, "r") as f: self.sdy_edit.setPlainText(f.read())
+                self.sdy_curr_lbl.setText("Viewing: sdy.example (Read-only)")
+                self.sdy_ex_btn.setText(" Back to Game Config")
+        else: self.load_selected_game_conf(self.games_list.currentItem())
+
+    def save_sdy_conf(self):
+        fname = self.sdy_curr_lbl.text().replace("Editing: ", "")
+        if ".conf" not in fname: return
+        with open(os.path.join(GAMES_CONF_DIR, fname), "w") as f: f.write(self.sdy_edit.toPlainText())
+        self.sdy_save_btn.setText(" Saved!"); QTimer.singleShot(2000, lambda: self.sdy_save_btn.setText(" Save Game Config"))
+
+    def target_last_game(self):
+        raw = self.run_cmd(f"grep 'SDY_REATTIVO_START' {STEAM_LOG} | tail -n1")
+        match = re.search(r'START:\s*([a-zA-Z0-9_-]+)', raw)
+        if match:
+            items = self.games_list.findItems(f"{match.group(1)}.conf", Qt.MatchFlag.MatchExactly)
+            if items: self.games_list.setCurrentItem(items[0]); self.load_selected_game_conf(items[0])
+
+    # --- LOG & INFO ---
+    def load_log_content(self):
+        if not os.path.exists(LOG_PATH): return
+        search = self.log_search.text().lower()
+        try:
+            with open(LOG_PATH, "r") as f: lines = f.readlines()
+            filtered = [re.sub(r'\x1b\[[0-9;]*[mK]', '', l) for l in lines[-2000:] if not search or search in l.lower()]
+            self.log_out.setPlainText("".join(filtered))
+            self.log_out.verticalScrollBar().setValue(self.log_out.verticalScrollBar().maximum())
+        except: pass
+
+    def update_system_info(self):
+        cpu_name = self.run_cmd("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2")
+        gpu_name = self.run_cmd("glxinfo -B | grep 'Device:' | cut -d: -f2")
+        if gpu_name == "N/A": gpu_name = self.run_cmd("lspci | grep -i vga | cut -d: -f3")
+
+        self.sw_labels["OS"].setText(self.run_cmd("grep PRETTY_NAME /etc/os-release | cut -d'\"' -f2"))
+        self.sw_labels["Kernel"].setText(self.run_cmd("uname -r"))
+        self.sw_labels["Session"].setText(os.environ.get("XDG_SESSION_TYPE", "N/A").capitalize())
+
+        self.hw_labels["CPU"].setText(cpu_name)
+        self.hw_labels["GPU"].setText(gpu_name)
+        self.gpu_log.setPlainText(self.run_cmd("lspci -vnn | grep -E 'VGA|Audio|Network' -A 2"))
+
+    def update_dynamic_info(self):
+        self.hw_labels["Memory Usage"].setText(self.run_cmd("free -h | grep Mem: | awk '{print $3 \" / \" $2}'"))
+
+    def on_tab_changed(self, index):
+        if "Logs" in self.tabs.tabText(index): self.load_log_content()
+
+    def copy_to_clipboard(self):
+        QApplication.clipboard().setText(self.log_out.toPlainText())
+        self.copy_btn.setText(" Copied!"); QTimer.singleShot(1500, lambda: self.copy_btn.setText(" Copy All"))
+
+    def clear_log(self):
+        try:
+            with open(LOG_PATH, 'w') as f: f.write(f"--- Log cleared ---\\n")
+            self.load_log_content()
+        except: pass
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    win = SteamDIYControl()
+    win.show()
+    sys.exit(app.exec())
