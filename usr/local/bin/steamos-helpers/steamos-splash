@@ -1,0 +1,38 @@
+#!/bin/bash
+# ==============================================================================
+# SteamOS-DIY Boot Splash System
+# Version: 1.2.0
+# Description: Minimalist TTY1 splash screen for session transitions.
+# ==============================================================================
+
+#!/bin/bash
+exec > /dev/tty1 2>&1
+echo -ne '\033c'
+setterm -cursor off
+
+# Colori
+B='\e[1;36m' # Cyan
+G='\e[1;32m' # Green
+R_CLR='\e[1;31m' # Red (per Shutdown)
+W='\e[1;37m' # White
+D='\e[1;30m' # Gray
+R='\e[0m'    # Reset
+
+PAD="          "
+
+case "$1" in
+    "game")     COLOR=$G; MODE="Game Mode";    STAT="Active" ;;
+    "desktop")  COLOR=$B; MODE="Desktop Mode"; STAT="Online" ;;
+    "reboot")   COLOR=$B; MODE="System";       STAT="Rebooting..." ;;
+    "shutdown") COLOR=$R_CLR; MODE="System";       STAT="Shutting down..." ;;
+esac
+
+echo -e "\n\n\n\n\n\n"
+echo -e "${PAD}${COLOR}      ◢◤  ◢◤      ${R}   ${W}lelo${R}@${W}steamos-diy${R}"
+echo -e "${PAD}${COLOR}    ◢◤      ◢◤    ${R}   ${D}-------------------${R}"
+echo -e "${PAD}${COLOR}  ◢◤          ◢◤  ${R}   ${W}Os${R}     : SteamOS-DIY"
+echo -e "${PAD}${COLOR}    ◢◤      ◢◤    ${R}   ${W}Mode${R}   : ${COLOR}${MODE}${R}"
+echo -e "${PAD}${COLOR}      ◢◤  ◢◤      ${R}   ${W}Status${R} : ${D}${STAT}${R}"
+
+# Durante lo spegnimento/riavvio non serve lo sleep lungo
+[[ "$1" == "reboot" || "$1" == "shutdown" ]] && sleep 1 || sleep 0.8

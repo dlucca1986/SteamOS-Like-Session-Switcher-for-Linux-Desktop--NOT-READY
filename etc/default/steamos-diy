@@ -1,0 +1,41 @@
+# =============================================================================
+# SteamOS-DIY - Global System Configuration
+# =============================================================================
+
+# --- USER SETTINGS ---
+# L'utente principale del sistema (usato per i percorsi Home e i permessi)
+STEAMOS_USER="lelo"
+
+# --- PATH SETTINGS ---
+# Cartella base per le configurazioni dei giochi (usata da sdy e UI)
+CONF_DIR="/home/lelo/.config/steamos-diy"
+GAMES_CONF_DIR="/home/lelo/.config/steamos-diy/games"
+
+# File di log centrale
+LOG_FILE="/var/log/steamos-diy.log"
+
+# Log di Steam (per l'estrazione degli errori e marker SDY)
+STEAM_LOG="/home/lelo/.local/share/Steam/logs/console-linux.txt"
+
+# --- HARDWARE & SESSION SETTINGS ---
+# Se lasciati vuoti, il launcher userà l'autodetect dinamico (Agnostico!)
+TARGET_WIDTH=""
+TARGET_HEIGHT=""
+REFRESH_RATE=""
+
+# Funzionalità avanzate (0 = Disabilitato, 1 = Abilitato)
+ENABLE_HDR=0
+ENABLE_VRR=0
+ENABLE_MANGOAPP=0
+
+# Argomenti extra per Gamescope (es: --backend sdl o --filter fsr)
+GAMESCOPE_ARGS=""
+
+# --- LOGGING SETTINGS ---
+LOG_TAG="[SteamOS-DIY]"
+LOG_LEVEL="info"
+
+# --- ENVI ---
+XDG_CURRENT_DESKTOP="gamescope"
+KDE_FULL_SESSION="false"
+GTK_USE_PORTAL=1

@@ -1,0 +1,85 @@
+#!/bin/bash
+# =============================================================================
+# SteamOS-DIY - Universal Game Wrapper (sdy)
+# Version: 1.6.0 (Agnostic Edition)
+# =============================================================================
+
+set -eou pipefail
+
+# --- 1. CONFIGURATION & AGNOSTIC LOADING ---
+GLOBAL_CONFIG="/etc/default/steamos-diy"
+
+if [[ -f "$GLOBAL_CONFIG" ]]; then
+    source "$GLOBAL_CONFIG"
+else
+    # Fallback se il file master manca (utile per compatibilità durante i test)
+    readonly LOG_FILE="/var/log/steamos-diy.log"
+    readonly STEAM_LOG="$HOME/.local/share/Steam/logs/console-linux.txt"
+    readonly GAMES_CONF_DIR="$HOME/.config/steamos-diy/games"
+fi
+
+# Variabili locali basate sul file Master
+readonly LOG_FILE="${LOG_FILE}"
+readonly STEAM_LOG_PATH="${STEAM_LOG}"
+readonly CONF_DIR="${GAMES_CONF_DIR}"
+readonly GLOBAL_GAME_CONF="$CONF_DIR/global.conf"
+
+log() {
+    local tag="$1"
+    local msg="$2"
+    # Usa il LOG_TAG del file Master
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${LOG_TAG:-[SteamOS-DIY]} [$tag] $msg" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# Assicuriamoci che la cartella config esista (usando la variabile agnostica)
+mkdir -p "$CONF_DIR"
+
+# --- 2. DYNAMIC TEMPLATE GENERATION ---
+if [[ ! -f "$GLOBAL_GAME_CONF" ]]; then
+    echo -e "# Global settings for all games\nexport GAME_PRE_COMMAND=\"\"\nexport GAME_ARGS=\"\"" > "$GLOBAL_GAME_CONF"
+fi
+
+# Identificazione del gioco (logica originale perfetta)
+REAL_PATH="${@: -1}"
+FOLDER_NAME=$(basename "$(dirname "$REAL_PATH")")
+GAME_CONF="$CONF_DIR/${FOLDER_NAME}.conf"
+
+if [[ ! -f "$GAME_CONF" ]]; then
+    echo -e "# Specific settings for $FOLDER_NAME\nexport GAME_PRE_COMMAND=\"\"\nexport GAME_ARGS=\"\"" > "$GAME_CONF"
+    log "WRAPPER" "Generated specific config for: $FOLDER_NAME"
+fi
+
+# --- 3. LOADING & CONCATENATION (Cumulative Logic) ---
+export GAME_PRE_COMMAND=""
+export GAME_ARGS=""
+
+# Carica Global
+source "$GLOBAL_GAME_CONF"
+G_PRE="$GAME_PRE_COMMAND"
+G_ARGS="$GAME_ARGS"
+
+# Carica Specific (reset prima del caricamento)
+export GAME_PRE_COMMAND=""
+export GAME_ARGS=""
+source "$GAME_CONF"
+
+FINAL_PRE="${G_PRE} ${GAME_PRE_COMMAND}"
+FINAL_ARGS="${GAME_ARGS} ${G_ARGS}"
+
+# --- 4. STEAM LOG SYNC MARKER ---
+# Cruciale per il Control Center: usa il percorso agnostico del log di Steam
+touch "$STEAM_LOG_PATH" 2>/dev/null || true
+printf "\n--- SDY_REATTIVO_START: %s ---\n" "$FOLDER_NAME" >> "$STEAM_LOG_PATH" 2>/dev/null || true
+sync "$STEAM_LOG_PATH" 2>/dev/null || true
+
+# --- 5. EXECUTION ---
+log "LAUNCH" "Starting Game: $FOLDER_NAME"
+
+if [[ -n "${FINAL_PRE// /}" || -n "${FINAL_ARGS// /}" ]]; then
+    log "ARGS" "Injection -> Prefix: [${FINAL_PRE:-NONE}] | Extra: [${FINAL_ARGS:-NONE}]"
+fi
+
+log "DEBUG" "Full Exec: $FINAL_PRE $@ $FINAL_ARGS"
+
+# Esecuzione professionale tramite 'env' con redirezione log
+exec env $FINAL_PRE "$@" $FINAL_ARGS 2>> "$LOG_FILE"

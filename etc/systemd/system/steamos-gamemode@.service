@@ -1,0 +1,52 @@
+[Unit]
+Description=SteamOS-DIY Game Mode for %i
+After=network.target systemd-user-sessions.service getty@tty1.service
+Conflicts=steamos-desktop@%i.service getty@tty1.service
+
+[Service]
+PAMName=login
+User=%i
+Group=%i
+WorkingDirectory=/home/%i
+UtmpIdentifier=tty1
+UtmpMode=user
+
+# Carica le variabili dal file Master
+EnvironmentFile=/etc/default/steamos-diy
+
+# Gestione TTY1 e LOG (Professionalizzazione)
+StandardInput=tty
+# Reindirizziamo l'output al file di log centrale per la UI
+StandardOutput=append:/var/log/steamos-diy.log
+StandardError=append:/var/log/steamos-diy.log
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+# AMBIENTE AGNOSTICO (Calcolato dinamicamente)
+# Usiamo /run/user/$(id -u %i) invece di 1000 fisso
+Environment=DISPLAY=:0
+Environment=XDG_SESSION_TYPE=wayland
+#Environment=XDG_CURRENT_DESKTOP=gamescope
+
+# PULIZIA E FEEDBACK VISIVO
+#ExecStartPre=-/usr/bin/bash -c "echo '' > /dev/tty1 && echo '  ➔ Avvio Game Mode...' > /dev/tty1"
+ExecStartPre=-/usr/bin/bash -c "clear > /dev/tty1"
+ExecStartPre=-/usr/bin/fuser -k /dev/tty1
+ExecStartPre=-/usr/local/bin/steamos-helpers/steamos-splash game
+
+#ExecStartPre=-/usr/bin/fuser -k /dev/dri/card*
+ExecStartPre=-/bin/sh -c 'if /usr/bin/fuser /dev/dri/card* >/dev/null 2>&1; then /usr/bin/fuser -k /dev/dri/card*; fi'
+
+# LANCIO
+#ExecStart=/usr/bin/dbus-run-session -- /usr/local/bin/steamos-session-launch
+ExecStart=/usr/bin/dbus-run-session -- /usr/bin/env KDE_FULL_SESSION=${KDE_FULL_SESSION} GTK_USE_PORTAL=${GTK_USE_PORTAL} /usr/local/bin/steamos-session-launch
+
+# GESTIONE ARRESTO
+Restart=no
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=500ms
+
+[Install]
+WantedBy=graphical.target

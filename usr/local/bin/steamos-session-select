@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# ==============================================================================
+# SteamOS-DIY Session Selector (Optimized for TTY1 & Conflicts)
+# ==============================================================================
+
+LOG_FILE="/var/log/steamos-diy.log"
+LOG_TAG="Session-Select"
+
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$LOG_TAG] $1" >> "$LOG_FILE"
+}
+
+REAL_USER=$(id -un)
+TARGET_ENV=$1
+DETACH_FLAG=$2
+
+# --- Detachment Logic ---
+# Essenziale: lo script deve sopravvivere alla chiusura della sessione chiamante
+if [[ "$DETACH_FLAG" != "--detached" ]]; then
+    log_message "Detaching for user $REAL_USER..."
+    systemd-run --user --collect /usr/bin/steamos-session-select "$TARGET_ENV" --detached
+    exit 0
+fi
+
+log_message "--- SWITCH INITIATED --- Target: $TARGET_ENV"
+
+case "$TARGET_ENV" in
+    "plasma" | "desktop")
+        log_message "Switching to Desktop Mode..."
+        # Grazie a 'Conflicts=', far partire il desktop spegne automaticamente Steam
+        sudo /usr/bin/systemctl start "steamos-desktop@$REAL_USER.service"
+        ;;
+
+    "gamescope" | "steam")
+        log_message "Switching to Game Mode..."
+        # Grazie a 'Conflicts=', far partire Steam spegne automaticamente il desktop
+        sudo /usr/bin/systemctl start "steamos-gamemode@$REAL_USER.service"
+        ;;
+
+    *)
+        log_message "Error: Invalid target '$TARGET_ENV'."
+        exit 1
+        ;;
+esac
+
+log_message "Request sent to systemd. Transition in progress on TTY1."

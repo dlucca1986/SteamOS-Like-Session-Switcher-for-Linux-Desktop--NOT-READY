@@ -1,0 +1,105 @@
+#!/bin/bash
+# =============================================================================
+# SteamMachine-DIY - Intelligent Universal Launcher (Agnostic Edition)
+# =============================================================================
+set -eou pipefail
+
+# --- 1. CONFIGURATION & AGNOSTIC LOADING ---
+# Caricamento del file Master definito nello Step A
+GLOBAL_CONFIG="/etc/default/steamos-diy"
+
+# [SOLUZIONE AGNOSTICA]: Rileviamo l'UID qui, prima di ogni altra cosa
+# Usiamo un default (id -u) se per qualche motivo la variabile non esiste
+CURRENT_UID=$(id -u)
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${CURRENT_UID}/bus"
+
+
+if [[ -f "$GLOBAL_CONFIG" ]]; then
+    set -a            # Attiva l'esportazione automatica di ogni variabile definita
+    source "$GLOBAL_CONFIG"
+    set +a            # Disattiva l'esportazione automatica
+else
+    echo "[ERROR] Global configuration not found at $GLOBAL_CONFIG"
+    exit 1
+fi
+
+# Variabili locali derivate (Usa i default se non definiti nel Master)
+readonly LOG_FILE="${LOG_FILE:-/var/log/steamos-diy.log}"
+readonly STEAM_LOG_PATH="${STEAM_LOG:-$HOME/.local/share/Steam/logs/console-linux.txt}"
+readonly CONFIG_FILE="${CONF_DIR:-$HOME/.config/steamos-diy}/config"
+
+log() {
+    local tag="$1"
+    local msg="$2"
+    # Scrive nel log file usando il tag definito nel file Master
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${LOG_TAG:-[SteamOS-DIY]} [$tag] $msg" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+echo "========================================" >> "$LOG_FILE"
+log "INIT" "New SteamOS-DIY session initiated for user: $USER"
+
+# --- 2. HARDWARE DETECTION (Mantieni la tua ottima logica) ---
+DRM_CONN=$(grep -l "^connected" /sys/class/drm/card*-*/status | head -n1 || true)
+DRM_PATH=$(dirname "$DRM_CONN")
+NATIVE_RES=$(head -n1 "$DRM_PATH/modes" 2>/dev/null || echo "1280x720")
+HW_W=${NATIVE_RES%x*}
+HW_H=${NATIVE_RES#*x}
+log "CONFIG" "Native hardware detected: ${HW_W}x${HW_H}"
+
+# --- 3. LOADING USER CONFIG ---
+# Qui sovrascriviamo le variabili se l'utente ha un file config locale
+[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+
+# --- 4. DYNAMIC ARGUMENTS CONSTRUCTION ---
+G_OPTS=("${G_OPTS_BASE:--e}")
+FINAL_W=${TARGET_WIDTH:-$HW_W}
+FINAL_H=${TARGET_HEIGHT:-$HW_H}
+FINAL_R=${REFRESH_RATE:-60}
+
+# Safety Cap
+if [ "$FINAL_W" -gt "$HW_W" ] || [ "$FINAL_H" -gt "$HW_H" ]; then
+    log "WARN" "Requested ${FINAL_W}x${FINAL_H} exceeds hardware. Capping to native."
+    FINAL_W=$HW_W; FINAL_H=$HW_H; FINAL_R=60
+fi
+
+G_OPTS+=("-W" "$FINAL_W" "-H" "$FINAL_H" "-r" "$FINAL_R")
+
+# Feature Toggles (Ora agnostici)
+[[ "${ENABLE_HDR:-0}" == "1" ]] && G_OPTS+=("--hdr-enabled")
+[[ "${ENABLE_VRR:-0}" == "1" ]] && G_OPTS+=("--adaptive-sync")
+[[ "${ENABLE_MANGOAPP:-0}" == "1" ]] && G_OPTS+=("--mangoapp")
+
+if [[ -n "${GAMESCOPE_ARGS:-}" ]]; then
+    read -r -a EXTRA <<< "$GAMESCOPE_ARGS"
+    G_OPTS+=("${EXTRA[@]}")
+fi
+
+log "LAUNCH" "Gamescope OPTS: ${G_OPTS[*]}"
+
+# --- 5. EXECUTION & WATCHDOG ---
+START_TIME=$(date +%s)
+G_EXIT_CODE=0
+
+stdbuf -oL -eL gamescope "${G_OPTS[@]}" -- \
+    steam -steamdeck -steamos3 >> "$LOG_FILE" 2>&1 || G_EXIT_CODE=$?
+
+RUNTIME=$(( $(date +%s) - START_TIME ))
+
+if [ "$G_EXIT_CODE" -ne 0 ] && [ "$RUNTIME" -lt 10 ]; then
+    log "CRITICAL" "Early crash detected after ${RUNTIME}s. Recovering to Safe Mode..."
+    stdbuf -oL -eL gamescope -e -W "$HW_W" -H "$HW_H" -r 60 -- \
+        steam -steamdeck -steamos3 >> "$LOG_FILE" 2>&1
+else
+    log "EXIT" "Session finished. Exit code: $G_EXIT_CODE"
+fi
+
+# --- 6. STEAM ERROR EXTRACTOR (Marker SDY) ---
+if [ "$G_EXIT_CODE" -ne 0 ]; then
+    if [[ -f "$STEAM_LOG_PATH" ]]; then
+        LAST_START_MARKER=$(grep -a "SDY_REATTIVO_START" "$STEAM_LOG_PATH" | tail -n 1 || true)
+        if [[ -n "$LAST_START_MARKER" ]]; then
+            log "STEAM_ERR" ">>> Extracting diagnostic context <<<"
+            grep -a -F -A 30 "$LAST_START_MARKER" "$STEAM_LOG_PATH" >> "$LOG_FILE" || true
+        fi
+    fi
+fi

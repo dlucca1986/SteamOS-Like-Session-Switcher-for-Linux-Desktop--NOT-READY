@@ -1,0 +1,39 @@
+#!/bin/bash
+# =============================================================================
+# SteamMachine-DIY - Hardware Compatibility Layer
+# =============================================================================
+# Script: jupiter-biosupdate
+# Version: 3.0.0
+# Description: Compatibility shim for SteamOS BIOS update infrastructure.
+#              Prevents errors during session transitions on DIY hardware.
+# Repository: https://github.com/dlucca1986/SteamMachine-DIY
+# Path:        /usr/local/bin/steamos-helpers/jupiter-biosupdate
+# License: MIT
+# =============================================================================
+
+# --- Configuration & Logging ---
+readonly LOG_FILE="/tmp/steamos-diy.log"
+readonly GREEN='\033[0;32m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
+
+# Log to both Master Log (for diagnostics) and Console (for manual runs)
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [BIOS-Shim] $1" >> "$LOG_FILE"
+}
+
+# --- Main Logic ---
+
+log_info "Checking for system firmware updates..."
+
+# DIY Hardware Notice: 
+# This satisfies SteamOS dependencies without risking firmware corruption
+# on non-Valve hardware. Actual BIOS updates must be done via the vendor.
+
+log_info "System firmware is managed by host OS. Returning success."
+
+echo -e "${GREEN}✓ Compatibility check passed.${NC}"
+
+# Exit gracefully
+exit 0

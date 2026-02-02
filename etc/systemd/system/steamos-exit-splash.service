@@ -1,0 +1,17 @@
+[Unit]
+Description=SteamOS-DIY Exit Splash
+DefaultDependencies=no
+Before=shutdown.target reboot.target halt.target
+StandardOutput=tty
+StandardInput=tty
+TTYPath=/dev/tty1
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/steamos-helpers/steamos-splash shutdown
+# Se systemd sta riavviando, sovrascriviamo lo splash con reboot
+ExecStartPost=-/bin/sh -c 'if systemctl list-jobs | grep -q "reboot.target"; then /usr/local/bin/steamos-helpers/steamos-splash reboot; fi'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=shutdown.target reboot.target
