@@ -1,7 +1,6 @@
 [Desktop Entry]
 Name=Switch to Game Mode
 Comment=Restart the session into Steam Deck UI
-
 Exec=steamos-switch-gamemode
 Icon=steam
 Terminal=false
