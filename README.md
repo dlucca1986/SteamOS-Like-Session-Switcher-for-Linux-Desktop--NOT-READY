@@ -16,7 +16,7 @@ This project has evolved into a professional **System Overlay** designed to fait
 
 ---
 
-## ✨ Key Features (Agnostic Edition)
+## ✨ Key Features (Systemd Edition)
 
 * **🔄 Native Session Switching**:
   Transition between **Gamescope** and **KDE Plasma** using the official UI buttons. No login screens, no passwords—just a clean handover managed by `systemd` unit conflicts.
