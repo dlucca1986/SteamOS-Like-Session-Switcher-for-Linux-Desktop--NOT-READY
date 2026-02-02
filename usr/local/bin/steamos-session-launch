@@ -8,6 +8,7 @@
 #              Automates hardware detection, Gamescope optimization, and 
 #              diagnostic log extraction for DIY Steam Machine builds.
 # Repository: https://github.com/dlucca1986/SteamMachine-DIY
+#
 # License: MIT
 # =============================================================================
 set -eou pipefail
