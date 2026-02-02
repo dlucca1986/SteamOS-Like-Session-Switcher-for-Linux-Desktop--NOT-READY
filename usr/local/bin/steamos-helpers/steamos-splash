@@ -8,33 +8,62 @@
 # License: MIT
 # ==============================================================================
 
-exec > /dev/tty1 2>&1
-echo -ne '\033c'
-setterm -cursor off
+# --- Import Global Configuration ---
+# Source the master config to get STEAMOS_USER and environment variables
+GLOBAL_CONF="/etc/default/steamos-diy"
+if [ -f "$GLOBAL_CONF" ]; then
+    source "$GLOBAL_CONF"
+fi
 
-# Colori
-B='\e[1;36m' # Cyan
-G='\e[1;32m' # Green
-R_CLR='\e[1;31m' # Red (per Shutdown)
-W='\e[1;37m' # White
-D='\e[1;30m' # Gray
-R='\e[0m'    # Reset
+# Fallback identity if the config file is missing or unread
+DISPLAY_USER="${STEAMOS_USER:-User}"
+
+# Redirect all output to TTY1 (Physical Console)
+exec > /dev/tty1 2>&1
+echo -ne '\033c'      # Clear terminal
+setterm -cursor off   # Hide cursor
+
+# --- ANSI Color Definitions ---
+B='\e[1;36m'      # Cyan (Desktop Mode)
+G='\e[1;32m'      # Green (Game Mode)
+R_CLR='\e[1;31m'  # Red (Shutdown/Error)
+W='\e[1;37m'      # White
+D='\e[1;30m'      # Gray
+R='\e[0m'         # Reset
 
 PAD="          "
 
+# --- State Logic ---
 case "$1" in
-    "game")     COLOR=$G; MODE="Game Mode";    STAT="Active" ;;
-    "desktop")  COLOR=$B; MODE="Desktop Mode"; STAT="Online" ;;
-    "reboot")   COLOR=$B; MODE="System";       STAT="Rebooting..." ;;
-    "shutdown") COLOR=$R_CLR; MODE="System";       STAT="Shutting down..." ;;
+    "game")     
+        COLOR=$G; MODE="Game Mode";    STAT="Active" 
+        DELAY=1.2 # Slightly longer to ensure visibility during switch
+        ;;
+    "desktop")  
+        COLOR=$B; MODE="Desktop Mode"; STAT="Online" 
+        DELAY=0.8
+        ;;
+    "reboot")   
+        COLOR=$B; MODE="System";       STAT="Rebooting..." 
+        DELAY=0.8
+        ;;
+    "shutdown") 
+        COLOR=$R_CLR; MODE="System";   STAT="Shutting down..." 
+        DELAY=0.8
+        ;;
+    *)
+        COLOR=$W; MODE="Unknown";      STAT="Wait..."
+        DELAY=0.5
+        ;;
 esac
 
+# --- Render ASCII Splash ---
 echo -e "\n\n\n\n\n\n"
-echo -e "${PAD}${COLOR}      ◢◤  ◢◤      ${R}   ${W}lelo${R}@${W}steamos-diy${R}"
+echo -e "${PAD}${COLOR}      ◢◤  ◢◤      ${R}   ${W}${DISPLAY_USER}${R}@${W}steamos-diy${R}"
 echo -e "${PAD}${COLOR}    ◢◤      ◢◤    ${R}   ${D}-------------------${R}"
 echo -e "${PAD}${COLOR}  ◢◤          ◢◤  ${R}   ${W}Os${R}     : SteamOS-DIY"
 echo -e "${PAD}${COLOR}    ◢◤      ◢◤    ${R}   ${W}Mode${R}   : ${COLOR}${MODE}${R}"
 echo -e "${PAD}${COLOR}      ◢◤  ◢◤      ${R}   ${W}Status${R} : ${D}${STAT}${R}"
 
-# Durante lo spegnimento/riavvio non serve lo sleep lungo
-[[ "$1" == "reboot" || "$1" == "shutdown" ]] && sleep 1 || sleep 0.8
+# Keep the splash visible for a moment before the next process takes over
+sleep $DELAY
