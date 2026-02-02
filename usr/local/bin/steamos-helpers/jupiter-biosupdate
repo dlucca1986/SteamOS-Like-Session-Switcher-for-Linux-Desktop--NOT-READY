@@ -3,7 +3,7 @@
 # SteamMachine-DIY - Hardware Compatibility Layer
 # =============================================================================
 # Script: jupiter-biosupdate
-# Version: 3.0.0
+# Version: 3.1.0
 # Description: Compatibility shim for SteamOS BIOS update infrastructure.
 #              Prevents errors during session transitions on DIY hardware.
 # Repository: https://github.com/dlucca1986/SteamMachine-DIY
