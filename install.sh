@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
-# SteamMachine-DIY - Master Installer (v3.1.8)
-# Fixed: Global permissions, broad desktop discovery, log handling
+# SteamMachine-DIY - Master Installer (v3.2.3)
+# Cleaned: Using repo-native shebangs, config preservation, desktop validation
 # =============================================================================
 
 set -uo pipefail
@@ -36,7 +36,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
 clear
 echo -e "${CYAN}==============================================${NC}"
-echo -e "${CYAN}   SteamOS-DIY Master Installer v3.1.8        ${NC}"
+echo -e "${CYAN}   SteamOS-DIY Master Installer v3.2.3        ${NC}"
 echo -e "${CYAN}==============================================${NC}"
 
 if [[ $EUID -ne 0 ]]; then
@@ -65,17 +65,15 @@ deploy_core() {
     info "Deploying Agnostic Core..."
     mkdir -p "$HELPERS_DEST" "$SYSTEMD_DEST/getty@tty1.service.d" "$APP_ENTRIES" "$POLKIT_LINKS_DIR"
 
-    # 1. Scripts & Helpers - FORZA ESECUZIONE SU TUTTO IL CONTENUTO
+    # 1. Scripts & Helpers (Usa Shebang nativi del repo)
     if [ -d "$SOURCE_DIR/usr/local/bin" ]; then
         cp -r "$SOURCE_DIR/usr/local/bin/"* "$BIN_DEST/" 2>/dev/null || true
-        info "Applying executable bits to all binaries..."
         chmod +x "$BIN_DEST"/* 2>/dev/null || true
         [ -d "$HELPERS_DEST" ] && chmod +x "$HELPERS_DEST"/* 2>/dev/null || true
     fi
 
     # 2. Systemd & Autologin Calibration
     cp "$SOURCE_DIR/etc/systemd/system/steamos-"*@.service "$SYSTEMD_DEST/" 2>/dev/null || true
-    cp "$SOURCE_DIR/etc/systemd/system/steamos-exit-splash.service" "$SYSTEMD_DEST/" 2>/dev/null || true
 
     local AUTO_FILE="$SYSTEMD_DEST/getty@tty1.service.d/autologin.conf"
     if [ -f "$SOURCE_DIR/etc/systemd/system/getty@tty1.service.d/autologin.conf" ]; then
@@ -84,18 +82,17 @@ deploy_core() {
         info "Autologin calibrated for: $REAL_USER"
     fi
 
-    # 3. Desktop Entries - SCOPERTA AMPIA
+    # 3. Desktop Entries
     for dir in "usr/share/applications" "usr/local/share/applications"; do
         if [ -d "$SOURCE_DIR/$dir" ]; then
             cp "$SOURCE_DIR/$dir/steamos-"*.desktop "$APP_ENTRIES/" 2>/dev/null || true
         fi
     done
 
-    # Calibration per lo switch e il controllo
     for file in "$APP_ENTRIES"/steamos-*.desktop; do
         [ -f "$file" ] || continue
-        sed -i "s/startsteamos/start steamos/g" "$file"
         sed -i "s/\[USERNAME\]/$REAL_USER/g" "$file"
+        chmod +x "$file"
     done
 
     update-desktop-database "$APP_ENTRIES" 2>/dev/null || true
@@ -103,16 +100,22 @@ deploy_core() {
 
 setup_configs() {
     info "Deploying user configurations..."
-    rm -rf "$USER_HOME/\${CONF_DIR}" 2>/dev/null
-    mkdir -p "$USER_CONF_DEST/games"
 
+    # Preserva il template globale se esiste nel repo
+    if [ -f "$SOURCE_DIR/etc/default/steamos-diy" ]; then
+        cp "$SOURCE_DIR/etc/default/steamos-diy" "$GLOBAL_CONF"
+        sed -i "s/^STEAMOS_USER=.*/STEAMOS_USER=\"$REAL_USER\"/" "$GLOBAL_CONF"
+        success "Global configuration preserved and calibrated."
+    else
+        echo "STEAMOS_USER=\"$REAL_USER\"" > "$GLOBAL_CONF"
+    fi
+
+    mkdir -p "$USER_CONF_DEST/games"
     if [ -d "$SOURCE_DIR/config" ]; then
         cp -r "$SOURCE_DIR/config/"* "$USER_CONF_DEST/"
         chown -R "$REAL_USER:$REAL_USER" "$USER_CONF_DEST"
     fi
 
-    echo "STEAMOS_USER=\"$REAL_USER\"" > "$GLOBAL_CONF"
-    # Gestione LOG
     touch "$LOG_FILE" && chmod 666 "$LOG_FILE"
 }
 
