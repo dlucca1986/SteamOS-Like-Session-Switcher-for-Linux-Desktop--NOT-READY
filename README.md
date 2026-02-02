@@ -27,6 +27,12 @@ This project has evolved into a professional **System Overlay** designed to fait
 * **⚙️ Centralized Master Config**:
   No more hunting for hidden files. The entire system is now governed by a single, professional configuration file: `/etc/default/steamos-diy`.
 
+* **⚡ Zero-DM Boot (Fast & Lean)**:
+  Eliminates SDDM/GDM. The system boots directly into the session via `agetty` autologin on TTY1, significantly reducing boot times and overhead.
+
+* **🚀 SteamOS Compatibility Shims**:
+  Includes specialized helpers (`jupiter-biosupdate`, `steamos-update`) that "trick" the Steam UI into thinking it's on official hardware, preventing update errors.
+
 * **🎮 Universal Game Wrapper (sdy)**:
   A powerful injection tool for your games. Add custom prefixes, or extra arguments globally or on a per-game basis.
 
@@ -37,16 +43,18 @@ This project has evolved into a professional **System Overlay** designed to fait
 I value your system's integrity. The "Agnostic" version follows a strict system-safe philosophy:
 
 * **Filesystem Hierarchy Standard**: Scripts are isolated in `/usr/local/bin/steamos-helpers/`, keeping your primary `/usr/bin/` clean while satisfying Steam's hardcoded path requirements through symbolic links.
+* **Transparent Sudoers**: Security is paramount. A minimal, dedicated policy file is added to `/etc/sudoers.d/steamos-diy`. It grants passwordless execution *only* to the specific scripts required for session switching.
 * **Systemd-Driven**: Sessions are managed as proper system services (`steamos-gamemode@.service`), ensuring better logging and process recovery.
 * **User-Agnostic**: Everything is built using dynamic UID/User detection. No hardcoded usernames.
-* **Wayland-Native**: Optimized for KDE Plasma 6 and Wayland-based SDDM to prevent X11 socket conflicts.
+* **Wayland-First & DM-Less**: Optimized for direct Wayland execution. By bypassing the Display Manager, we ensure **Gamescope** has exclusive, conflict-free access to the GPU.
+* **Full Reversibility**: Every system change, link, and configuration entry is tracked. The included uninstaller can revert your system to its original state at any time.
 
 ---
 
 ## 🛠️ Prerequisites
 
 * **GPU**: AMD Radeon (preferred) or Intel Graphics (Mesa drivers).
-* **Display Manager**: **SDDM** (configured for Wayland).
+* **Display Manager**: **None/Disabled** (Direct TTY1 login).
 * **Desktop Environment**: KDE Plasma 6.x.
 * **Core Software**: `steam`, `gamescope`, `mangohud`, `gamemode`.
 
@@ -101,20 +109,6 @@ Follow these steps to transform your system. The installer will guide you throug
    ```    
 
 * 💡 **Note**: The installer is interactive and will automatically verify your AMD/Intel hardware, install missing dependencies, and configure the necessary system permissions.
-
----
-
-## 🛡️ Clean Architecture & Safety
-
-I value your system's integrity. This project follows a "system-safe" philosophy to ensure your Arch Linux installation remains clean and stable:
-
-* **Non-Intrusive**: Real binaries and scripts are isolated in `/usr/local/bin/`. We use a dedicated directory `/usr/bin/steamos-polkit-helpers/` for symbolic links. This satisfies Steam's hardcoded path requirements without cluttering or overwriting files in your primary `/usr/bin/` directory.
-
-* **Transparent Sudoers**: Security is paramount. A minimal, dedicated policy file is added to `/etc/sudoers.d/steamos-switcher`. It grants passwordless execution *only* to the specific scripts required for session switching, following the principle of least privilege.
-  
-* **Wayland-First Approach**: The project configures SDDM to run on Wayland. This is a strategic choice to ensure **Gamescope** can reliably claim the primary display socket, preventing common X11 resource conflicts and ensuring a seamless transition between the Desktop and Gaming Mode.
-
-* **Full Reversibility**: Every system change, link, and configuration entry is tracked. The included uninstaller can revert your system to its original state at any time.
 
 ---
 
