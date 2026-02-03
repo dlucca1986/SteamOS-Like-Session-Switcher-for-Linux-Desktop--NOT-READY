@@ -10,12 +10,14 @@
 
 # --- [ HOW SDY EXECUTES YOUR GAME ] ---
 # The final command is built following this exact order:
-# [Global Pre] + [Game Pre] + Steam_Executable + [Game Args] + [Global Args]
+# [Global Pre] + [Game Pre] + Steam_Executable + [Global Args] + [Game Args]
 #
 # PRACTICAL EXAMPLE:
 # global.conf: PRE="mangohud" | ARGS="-vulkan"
-# game.conf:   PRE="gamemoderun" | ARGS="-novid"
-# RESULT: mangohud gamemoderun App.exe -novid -vulkan
+# game.conf:   PRE="gamemoderun" | ARGS="-opengl"
+# RESULT: mangohud gamemoderun App.exe -vulkan -opengl
+# (Note: In case of conflict, -opengl wins because it is read last)
+
 # -----------------------------------------------------------------------------
 
 # --- [ 1. PRE-COMMAND (PREFIX) ] ---
