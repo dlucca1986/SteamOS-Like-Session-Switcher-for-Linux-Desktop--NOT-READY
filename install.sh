@@ -50,7 +50,7 @@ install_dependencies() {
         pacman -Sy
     fi
 
-    local pkgs=(steam gamescope xorg-xwayland mangohud lib32-mangohud gamemode lib32-gamemode vulkan-icd-loader lib32-vulkan-icd-loader mesa-utils python-pyqt6 pciutils procps-ng)
+    local pkgs=(steam steam-devices gamescope xorg-xwayland mangohud lib32-mangohud gamemode lib32-gamemode vulkan-icd-loader lib32-vulkan-icd-loader mesa-utils python-pyqt6 pciutils procps-ng)
 
     if lspci | grep -iq "AMD"; then
         pkgs+=(vulkan-radeon lib32-vulkan-radeon)
