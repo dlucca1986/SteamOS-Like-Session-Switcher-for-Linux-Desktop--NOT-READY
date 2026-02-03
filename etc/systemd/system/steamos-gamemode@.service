@@ -1,10 +1,8 @@
 [Unit]
-# =============================================================================
-# SteamMachine-DIY - Game Mode Session Service
-# =============================================================================
-Description=SteamOS-DIY Game Mode for %i
+Description=SteamOS-DIY Game Mode Session for %i
+# Ensure network is up and user sessions are ready before starting
 After=network.target systemd-user-sessions.service getty@tty1.service
-# Conflicts ensures that starting Game Mode automatically stops Desktop Mode
+# Prevent conflicts with the desktop session and standard TTY login
 Conflicts=steamos-desktop@%i.service getty@tty1.service
 
 [Service]
@@ -15,43 +13,52 @@ WorkingDirectory=/home/%i
 UtmpIdentifier=tty1
 UtmpMode=user
 
-# Load Global Master Configuration
+# Load global configuration variables
 EnvironmentFile=/etc/default/steamos-diy
 
-# TTY1 & Log Management
+# TTY & Logging Management
+# Redirecting output to TTY1 and logging to a persistent file for debugging
 StandardInput=tty
-# Append output to the central log file for diagnostic UI
 StandardOutput=append:/var/log/steamos-diy.log
 StandardError=append:/var/log/steamos-diy.log
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
 
-# AGNOSTIC ENVIRONMENT SETTINGS
+# Display Environment
 Environment=DISPLAY=:0
 Environment=XDG_SESSION_TYPE=wayland
 
-# PRE-LAUNCH CLEANUP & VISUAL FEEDBACK
-# 1. Clear TTY1 for a clean transition
+# --- STARTUP PHASE ---
+# 1. Clear the terminal to ensure a clean slate
 ExecStartPre=-/usr/bin/bash -c "clear > /dev/tty1"
-# 2. Kill any process still holding TTY1
-ExecStartPre=-/usr/bin/fuser -k /dev/tty1
-# 3. Trigger the Game Mode Splash Screen
+# 2. Trigger the green "Game Mode" splash screen
 ExecStartPre=-/usr/local/bin/steamos-helpers/steamos-splash game
-# 4. Critical: Ensure the GPU (DRI) is free from previous sessions
-ExecStartPre=-/bin/sh -c 'if /usr/bin/fuser /dev/dri/card* >/dev/null 2>&1; then /usr/bin/fuser -k /dev/dri/card*; fi'
 
-# LAUNCH SEQUENCE
-# Executed via dbus-run-session to ensure a valid session bus for Gamescope/Steam
-ExecStart=/usr/bin/dbus-run-session -- /usr/bin/env KDE_FULL_SESSION=${KDE_FULL_SESSION} GTK_USE_PORTAL=${GTK_USE_PORTAL} /usr/local/bin/steamos-session-launch
+# --- SESSION LAUNCH ---
+# Execute the main SteamOS session launcher
+ExecStart=/usr/local/bin/steamos-session-launch
 
-# SESSION MANAGEMENT
+# --- EXIT PHASE (Shutdown/Reboot Logic) ---
+# This block handles visual transitions specifically during power state changes.
+# It ensures Steam correctly signals the system state before the TTY is released.
+ExecStopPost=-/usr/bin/bash -c '\
+    if systemctl list-jobs | grep -qE "reboot.target|shutdown.target|poweroff.target|halt.target"; then \
+        /usr/bin/chvt 1; \
+        echo -ne "\033c" > /dev/tty1; \
+        if systemctl list-jobs | grep -q "reboot.target"; then \
+            /usr/local/bin/steamos-helpers/steamos-splash reboot; \
+        else \
+            /usr/local/bin/steamos-helpers/steamos-splash shutdown; \
+        fi \
+    fi'
+
+# Session Management Policy
 Restart=no
 KillMode=mixed
 KillSignal=SIGTERM
-# Short timeout for faster transitions between modes
-TimeoutStopSec=500ms
+TimeoutStopSec=3s
 
 [Install]
-# Hook into the graphical target sequence
+# Link the service to the graphical target for auto-start capabilities
 WantedBy=graphical.target
