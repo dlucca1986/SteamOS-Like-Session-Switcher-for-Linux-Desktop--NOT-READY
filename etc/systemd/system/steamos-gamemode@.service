@@ -57,7 +57,7 @@ ExecStopPost=-/usr/bin/bash -c '\
 Restart=no
 KillMode=mixed
 KillSignal=SIGTERM
-TimeoutStopSec=3s
+TimeoutStopSec=2s
 
 [Install]
 # Link the service to the graphical target for auto-start capabilities
