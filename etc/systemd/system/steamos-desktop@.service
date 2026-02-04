@@ -50,7 +50,7 @@ ExecStart=/usr/bin/startplasma-wayland
 Restart=no
 KillMode=mixed
 KillSignal=SIGTERM
-TimeoutStopSec=3s
+TimeoutStopSec=2s
 
 [Install]
 # Enable the service for graphical.target
