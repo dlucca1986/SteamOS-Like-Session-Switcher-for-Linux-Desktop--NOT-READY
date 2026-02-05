@@ -1,6 +1,10 @@
-# Permessi per il cambio sessione e gestione privilegi SteamOS-DIY
-# Questo file permette all'utente del gruppo wheel di eseguire gli helper senza password
+# Permessi per i binari di sessione
+%wheel ALL=(ALL:ALL) NOPASSWD: /usr/local/bin/steamos-session-select
+%wheel ALL=(ALL:ALL) NOPASSWD: /usr/local/bin/steamos-session-launch
+%wheel ALL=(ALL:ALL) NOPASSWD: /usr/local/bin/steamos-helpers/*
 
-%wheel ALL=(ALL) NOPASSWD: /usr/local/bin/steamos-session-select
-%wheel ALL=(ALL) NOPASSWD: /usr/local/bin/steamos-session-launch
-%wheel ALL=(ALL) NOPASSWD: /usr/local/bin/steamos-helpers/*
+# Permessi per lo switch delle sessioni tramite Systemd
+%wheel ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl start steamos-gamemode@*
+%wheel ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl start steamos-desktop@*
+%wheel ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl stop steamos-gamemode@*
+%wheel ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl stop steamos-desktop@*
