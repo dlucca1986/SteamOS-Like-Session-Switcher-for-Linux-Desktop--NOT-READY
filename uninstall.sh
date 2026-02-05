@@ -83,6 +83,10 @@ rm -f "$APPS_DEST/steamos-diy-control.desktop" \
 info "Cleaning up Systemd and Security policies..."
 rm -f "$SYSTEMD_DEST/steamos-"*@.service
 rm -rf "$SYSTEMD_DEST/getty@tty1.service.d"
+
+# Rimozione del "paracadute" di shutdown finale
+rm -f "/usr/lib/systemd/system-shutdown/steamos-diy-final"
+
 rm -f "$SUDOERS_FILE"
 rm -f "$HOOK_FILE"
 rm -f "$GLOBAL_CONF"
