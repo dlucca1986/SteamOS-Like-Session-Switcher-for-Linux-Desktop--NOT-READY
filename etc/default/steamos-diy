@@ -3,20 +3,29 @@
 # =============================================================================
 
 # --- 1. IDENTITY ---
+# Popolata dall'installer (es. lelo)
 export STEAMOS_USER="[USER_HERE]"
 
-# --- 2. DYNAMIC PATHS ---
+# --- 2. DYNAMIC PATHS (Agnostici) ---
 export USER_HOME=$(getent passwd "${STEAMOS_USER}" | cut -d: -f6)
 export CONF_DIR="${USER_HOME}/.config/steamos-diy"
 export GAMES_CONF_DIR="${CONF_DIR}/games"
 export LOG_FILE="${CONF_DIR}/session.log"
 
 # --- 3. EXECUTION & COMMANDS ---
-export STEAM_CMD="steam -steamdeck -steamos3"
+# Il cuore dell'avvio di Steam e risoluzione d'emergenza
+export STEAM_CMD="steam -gamepadui -steamdeck -steamos3"
 export DEFAULT_RES="1280x720"
 
 # --- 4. BINARIES & HELPERS ---
+# Percorsi fissi definiti come variabili per Systemd e Select
 export BIN_DIR="/usr/local/bin"
 export HELPER_DIR="${BIN_DIR}/steamos-helpers"
+
+# Binari invocati dai servizi Systemd
+export BIN_SESSION_LAUNCH="${BIN_DIR}/steamos-session-launch"
+export BIN_SESSION_SELECT="${BIN_DIR}/steamos-session-select"
+
+# Wrapper e Splash
 export BIN_SDY="${BIN_DIR}/sdy"
 export BIN_SPLASH="${HELPER_DIR}/steamos-splash"
