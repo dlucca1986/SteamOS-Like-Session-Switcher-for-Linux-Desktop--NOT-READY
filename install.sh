@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SteamOS-DIY - Master Installer (v4.2.2 SSoT)
+# SteamOS-DIY - Master Installer (v4.2.3 SSoT)
 # =============================================================================
 
 set -uo pipefail
@@ -59,11 +59,9 @@ install_dependencies() {
 
 deploy_core() {
     info "Deploying Core Infrastructure..."
-    # Pulizia: non creiamo più /usr/share/steamos-diy
     mkdir -p "$HELPERS_DEST" "$POLKIT_LINKS_DIR" "$APPS_DEST"
     
-    # 1. Copia Binari & Helpers (v4.0.0)
-    # Nota: mantiene la tua struttura usr/local/bin/
+    # 1. Copia Binari & Helpers
     cp -r "$SOURCE_DIR/usr/local/bin/"* "$BIN_DEST/" 2>/dev/null || true
     chmod +x "$BIN_DEST"/* "$HELPERS_DEST"/* 2>/dev/null || true
 
@@ -72,7 +70,7 @@ deploy_core() {
         cp "$SOURCE_DIR/usr/share/applications/"*.desktop "$APPS_DEST/" 2>/dev/null || true
     fi
 
-    # 3. Global Symlinks (Mantenuti per compatibilità)
+    # 3. Global Symlinks
     ln -sf "$BIN_DEST/steamos-session-launch" "/usr/bin/steamos-session-launch"
     ln -sf "$BIN_DEST/steamos-session-select" "/usr/bin/steamos-session-select"
     ln -sf "$BIN_DEST/sdy" "/usr/bin/sdy"
@@ -86,11 +84,10 @@ setup_configs() {
     # 1. Master Config (SSoT)
     if [ -f "$SOURCE_DIR/etc/default/steamos-diy" ]; then
         cp "$SOURCE_DIR/etc/default/steamos-diy" "$GLOBAL_CONF"
-        # Iniettiamo l'utente reale nel Master
         sed -i "s/^export STEAMOS_USER=.*/export STEAMOS_USER=\"$REAL_USER\"/" "$GLOBAL_CONF"
     fi
 
-    # 2. Systemd Units (Servizi)
+    # 2. Systemd Units
     if [ -d "$SOURCE_DIR/etc/systemd/system" ]; then
         cp "$SOURCE_DIR/etc/systemd/system/"*.service "$SYSTEMD_DIR/" 2>/dev/null || true
     fi
@@ -103,12 +100,17 @@ setup_configs() {
         sed -i "s/\[USERNAME\]/$REAL_USER/g" "$AUTO_DIR/autologin.conf"
     fi
 
-    # 4. Final Splash (System-Shutdown Hook)
+    # 4. Desktop Entries Calibration (Sostituzione [USERNAME])
+    if ls "$APPS_DEST/"*.desktop >/dev/null 2>&1; then
+        sed -i "s/\[USERNAME\]/$REAL_USER/g" "$APPS_DEST/"*.desktop
+    fi
+
+    # 5. Final Splash
     local SHUTDOWN_HOOK_DIR="/usr/lib/systemd/system-shutdown"
     mkdir -p "$SHUTDOWN_HOOK_DIR"
     ln -sf "$HELPERS_DEST/steamos-splash" "$SHUTDOWN_HOOK_DIR/steamos-diy-final"
 
-    # 5. Home Config & Games Dir (Qui creiamo fisicamente la struttura)
+    # 6. Home Config & Games Dir
     mkdir -p "$USER_CONF_DEST/games"
     if [ -d "$SOURCE_DIR/config" ]; then
         cp -r "$SOURCE_DIR/config/"* "$USER_CONF_DEST/"
@@ -167,7 +169,6 @@ disable_conflicts() {
 enable_services() {
     info "Activating Systemd Units..."
     systemctl daemon-reload
-    # Abilitiamo il servizio gamemode per l'utente reale
     systemctl enable "steamos-gamemode@${REAL_USER}.service"
     
     if [ -x /usr/bin/gamescope ]; then
