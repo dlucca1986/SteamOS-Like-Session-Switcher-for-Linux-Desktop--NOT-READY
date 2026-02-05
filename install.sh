@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SteamOS-DIY - Master Installer (v4.1.0 Enterprise + Hardware Aware)
+# SteamOS-DIY - Master Installer (v4.2.0 Enterprise)
 # =============================================================================
 
 set -uo pipefail
@@ -24,6 +24,7 @@ SYSTEM_DEFAULTS_DIR="/usr/share/steamos-diy"
 GLOBAL_CONF="/etc/default/steamos-diy"
 USER_CONF_DEST="$USER_HOME/.config/steamos-diy"
 SUDOERS_DEST="/etc/sudoers.d/steamos-diy"
+HOOK_DIR="/etc/pacman.d/hooks"
 
 info()    { echo -e "${CYAN}[SYSTEM]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -35,7 +36,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 install_dependencies() {
-    info "Updating system and detecting hardware..."
+    info "Updating system and detecting GPU hardware..."
     
     if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
         echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
@@ -44,12 +45,12 @@ install_dependencies() {
 
     local pkgs=(steam gamescope xorg-xwayland mangohud python-pyqt6 pciutils mesa-utils procps-ng lib32-mangohud gamemode lib32-gamemode)
 
-    # GPU Driver Auto-Detection (Vital for Gaming)
+    # GPU Auto-Detection
     if lspci | grep -iq "AMD"; then
-        info "AMD GPU detected. Adding Vulkan Radeon drivers..."
+        info "AMD GPU detected. Adding specific Vulkan drivers..."
         pkgs+=(vulkan-radeon lib32-vulkan-radeon)
     elif lspci | grep -iq "Intel"; then
-        info "Intel GPU detected. Adding Vulkan Intel drivers..."
+        info "Intel GPU detected. Adding specific Vulkan drivers..."
         pkgs+=(vulkan-intel lib32-vulkan-intel)
     fi
 
@@ -57,26 +58,23 @@ install_dependencies() {
 }
 
 deploy_core() {
-    info "Deploying Core Infrastructure & Binaries..."
+    info "Deploying Core Infrastructure..."
     mkdir -p "$HELPERS_DEST" "$SYSTEM_DEFAULTS_DIR" "$POLKIT_LINKS_DIR"
     
-    # 1. Copia Binari Originali
-    if [ -d "$SOURCE_DIR/usr/local/bin" ]; then
-        cp -r "$SOURCE_DIR/usr/local/bin/"* "$BIN_DEST/" 2>/dev/null || true
-        chmod +x "$BIN_DEST"/* "$HELPERS_DEST"/* 2>/dev/null || true
-    fi
+    # 1. Copia Binari
+    cp -r "$SOURCE_DIR/usr/local/bin/"* "$BIN_DEST/" 2>/dev/null || true
+    chmod +x "$BIN_DEST"/* "$HELPERS_DEST"/* 2>/dev/null || true
 
     # 2. Defaults (SSoT Level 2)
     if [ -f "$SOURCE_DIR/usr/share/steamos-diy/defaults" ]; then
         cp "$SOURCE_DIR/usr/share/steamos-diy/defaults" "$SYSTEM_DEFAULTS_DIR/defaults"
-        success "System defaults deployed."
     fi
 
-    # 3. Global Symlinks (Per accesso universale e Control Center)
-    info "Creating global command symlinks..."
+    # 3. Global Symlinks
     ln -sf "$BIN_DEST/steamos-session-launch" "/usr/bin/steamos-session-launch"
     ln -sf "$BIN_DEST/steamos-session-select" "/usr/bin/steamos-session-select"
     ln -sf "$BIN_DEST/sdy" "/usr/bin/sdy"
+    success "Infrastructure and Symlinks established."
 }
 
 setup_configs() {
@@ -88,7 +86,7 @@ setup_configs() {
         sed -i "s/^export STEAMOS_USER=.*/export STEAMOS_USER=\"$REAL_USER\"/" "$GLOBAL_CONF"
     fi
 
-    # 2. Autologin Calibration (Drop-in)
+    # 2. Autologin Calibration
     local AUTO_DIR="/etc/systemd/system/getty@tty1.service.d"
     mkdir -p "$AUTO_DIR"
     if [ -f "$SOURCE_DIR/etc/systemd/system/getty@tty1.service.d/autologin.conf" ]; then
@@ -104,14 +102,13 @@ setup_configs() {
 }
 
 setup_security() {
-    info "Applying Sudoers & Polkit Mapping..."
+    info "Applying Sudoers & Pacman Hooks..."
     
-    # 1. Popolamento Polkit Helpers (Symlinks verso /usr/bin)
+    # 1. Polkit Mapping
     if ls "$HELPERS_DEST/"* >/dev/null 2>&1; then
         for helper in "$HELPERS_DEST"/*; do
             ln -sf "$helper" "$POLKIT_LINKS_DIR/$(basename "$helper")"
         done
-        success "Polkit helpers mapped."
     fi
 
     # 2. Sudoers
@@ -119,10 +116,26 @@ setup_security() {
         cp "$SOURCE_DIR/etc/sudoers.d/steamos-diy" "$SUDOERS_DEST"
         chmod 440 "$SUDOERS_DEST"
     fi
+
+    # 3. Pacman Hook (Gamescope Persistence)
+    mkdir -p "$HOOK_DIR"
+    cat <<EOF > "$HOOK_DIR/gamescope-capabilities.hook"
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = gamescope
+
+[Action]
+Description = Restoring Gamescope capabilities...
+When = PostTransaction
+Exec = /usr/bin/setcap 'cap_sys_admin,cap_sys_nice,cap_ipc_lock+ep' /usr/bin/gamescope
+EOF
+    success "Security policies and hooks active."
 }
 
 disable_conflicts() {
-    info "Disabling Login Managers..."
+    info "Disabling Display Managers..."
     local dms=(sddm gdm lightdm lxdm)
     for dm in "${dms[@]}"; do
         if systemctl is-active --quiet "$dm"; then
@@ -133,15 +146,15 @@ disable_conflicts() {
 }
 
 enable_services() {
-    info "Activating Services..."
+    info "Activating Systemd Units..."
     systemctl daemon-reload
     systemctl enable "steamos-gamemode@${REAL_USER}.service" 2>/dev/null || true
     
-    # Set capabilities per Gamescope (Performance & Scheduling)
+    # Initial setcap
     [ -x /usr/bin/gamescope ] && setcap 'cap_sys_admin,cap_sys_nice,cap_ipc_lock+ep' /usr/bin/gamescope 2>/dev/null || true
 }
 
-# --- Execution ---
+# --- Execution Flow ---
 install_dependencies
 deploy_core
 setup_configs
@@ -150,5 +163,5 @@ disable_conflicts
 enable_services
 
 echo -e "\n${GREEN}==============================================${NC}"
-success "Installation Complete! Reboot to start SteamOS-DIY."
+success "Installation Complete! Reboot now."
 echo -e "${GREEN}==============================================${NC}"
