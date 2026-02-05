@@ -11,62 +11,68 @@ DELAY_LONG="${SPLASH_DELAY_LONG:-2.5}"
 LOCK_FILE="/run/steamos-splash.pid"
 
 # --- 2. GESTIONE DETERMINISTICA DEL LOCK ---
+# Durante lo shutdown finale /run potrebbe essere in sola lettura o parzialmente smontato
 if [[ -f "$LOCK_FILE" ]]; then
     OLD_PID=$(cat "$LOCK_FILE")
     if kill -0 "$OLD_PID" 2>/dev/null; then
         exit 0 
     fi
 fi
-echo $$ > "$LOCK_FILE"
+echo $$ > "$LOCK_FILE" 2>/dev/null || true
 
 # --- 3. FORZATURA TTY & RESET ---
-# Pulizia profonda: reset terminale e cursore invisibile
-/usr/bin/chvt 1 2>/dev/null || true
+# Se non siamo in fase di shutdown profondo, forziamo la TTY1
+if ! [[ "${1:-}" =~ ^(reboot|poweroff|halt)$ ]]; then
+    /usr/bin/chvt 1 2>/dev/null || true
+fi
+
 echo -ne "\033c" > /dev/tty1
 setterm -cursor off > /dev/tty1 || true
 
-# --- 4. LOGICA DEGLI STATI ---
+# --- 4. LOGICA DEGLI STATI (Bivalente) ---
 CYAN='\e[1;36m'; GREEN='\e[1;32m'; RED='\e[1;31m'; YELLOW='\e[1;33m'
 WHITE='\e[1;37m'; GRAY='\e[1;30m'; RESET='\e[0m'
 
 MODE_ARG="${1:-auto}"
 
 case "$MODE_ARG" in
-    "game")     COLOR=$GREEN;  MODE="Game Mode";    STAT="Launching..."; DELAY=$DELAY_SHORT ;;
-    "desktop")  COLOR=$CYAN;   MODE="Desktop Mode"; STAT="Switching..."; DELAY=$DELAY_SHORT ;;
+    "game")     
+        COLOR=$GREEN;  MODE="Game Mode";    STAT="Launching..."; DELAY=$DELAY_SHORT ;;
+    "desktop")  
+        COLOR=$CYAN;   MODE="Desktop Mode"; STAT="Switching..."; DELAY=$DELAY_SHORT ;;
+    "reboot")
+        COLOR=$YELLOW; MODE="System";       STAT="Rebooting..."; DELAY=$DELAY_LONG ;;
+    "poweroff"|"halt")
+        COLOR=$RED;    MODE="System";       STAT="Shutting down..."; DELAY=$DELAY_LONG ;;
     *)
-        if systemctl list-jobs | grep -q "reboot.target"; then
+        # AUTO-RILEVAMENTO (Per chiamate senza argomenti espliciti)
+        if systemctl list-jobs 2>/dev/null | grep -q "reboot.target"; then
             COLOR=$YELLOW; MODE="System"; STAT="Rebooting..."; DELAY=$DELAY_LONG
-        elif systemctl list-jobs | grep -qE "shutdown.target|poweroff.target|halt.target"; then
+        elif systemctl list-jobs 2>/dev/null | grep -qE "shutdown.target|poweroff.target|halt.target"; then
             COLOR=$RED;    MODE="System"; STAT="Shutting down..."; DELAY=$DELAY_LONG
         else
             # CASO SWITCH (TOTAL BLACK)
-            rm -f "$LOCK_FILE"
+            rm -f "$LOCK_FILE" 2>/dev/null || true
             exit 0
         fi
         ;;
 esac
 
-# --- 5. RENDERING ADATTIVO (Centrato per TV/Monitor) ---
-# Rileviamo le dimensioni attuali della TTY
+# --- 5. RENDERING ADATTIVO ---
 COLUMNS=$(tput cols 2>/dev/null || echo 80)
 LINES=$(tput lines 2>/dev/null || echo 24)
 
-# Il blocco è largo 52 caratteri e alto 5 righe
 OFFSET_X=$(( (COLUMNS - 52) / 2 ))
 OFFSET_Y=$(( (LINES - 5) / 2 ))
 
-# Protezione per valori negativi su schermi piccolissimi
 [ $OFFSET_X -lt 0 ] && OFFSET_X=0
 [ $OFFSET_Y -lt 0 ] && OFFSET_Y=0
 
-# Generazione Padding
 PADDING_Y=""
 for ((i=0; i<OFFSET_Y; i++)); do PADDING_Y+="\n"; done
 PAD_X=""
 for ((i=0; i<OFFSET_X; i++)); do PAD_X+=" "; done
 
-# Costruzione Output
 OUT="${PADDING_Y}"
 OUT+="${PAD_X}${COLOR}   ◢██████◣   ${RESET}  ${COLOR}◢◤ ${WHITE}${SYSTEM_NAME}${RESET}\n"
 OUT+="${PAD_X}${COLOR}  ██◤    ◥██  ${RESET}  ${GRAY}━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
@@ -74,9 +80,13 @@ OUT+="${PAD_X}${COLOR}  ██       ██  ${RESET}  ${GRAY}Powered by KISS${R
 OUT+="${PAD_X}${COLOR}  ██◣    ◢██  ${RESET}  ${WHITE}MODE   : ${COLOR}${MODE}${RESET}\n"
 OUT+="${PAD_X}${COLOR}   ◥██████◤   ${RESET}  ${WHITE}STATUS : ${GRAY}${STAT}${RESET}\n"
 
-# Output finale sulla TTY1
 echo -ne "$OUT" > /dev/tty1
-sleep "${DELAY}"
 
-# Pulizia finale
-rm -f "$LOCK_FILE"
+# Se siamo in shutdown/reboot, non vogliamo delay eccessivi o pulizia
+if [[ "$MODE_ARG" =~ ^(reboot|poweroff|halt)$ ]]; then
+    # Lasciamo il logo impresso, il kernel penserà al resto
+    exit 0
+fi
+
+sleep "${DELAY}"
+rm -f "$LOCK_FILE" 2>/dev/null || true
