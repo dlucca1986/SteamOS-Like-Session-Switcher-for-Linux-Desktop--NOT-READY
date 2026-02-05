@@ -1,67 +1,57 @@
 #!/bin/bash
 # =============================================================================
-# SteamMachine-DIY - steamos-session-select
+# SteamMachine-DIY - steamos-session-select (v4.0.0)
 # =============================================================================
-# Script:      sdy
-# Version:     4.0.0
-# Philosophy:  KISS (Keep It Simple, Stupid)
-# Description: Handles transitions between Gaming Mode (Gamescope) and 
-#              Desktop Mode (Plasma). Optimized for TTY1 execution and 
-#              process detachment to prevent session hangups.
-# Repository: https://github.com/dlucca1986/SteamMachine-DIY
-# Path:        /usr/local/bin/steamos-session-select
-# License: MIT
-# =============================================================================
-
-
 set -eou pipefail
 
-# --- 1. CARICAMENTO GERARCHICO (SSoT) ---
-source "/usr/share/steamos-diy/defaults" 2>/dev/null || { echo "Defaults missing"; exit 1; }
-source "/etc/default/steamos-diy" 2>/dev/null || { echo "Master Config missing"; exit 1; }
+# --- 1. CARICAMENTO AGNOSTICO (SSoT) ---
+source "/etc/default/steamos-diy" 2>/dev/null || { echo "Critical Error: Master Config missing"; exit 1; }
+# Nota: qui non serve caricare il config utente perché gestiamo solo i service di sistema
 
 log() {
     local msg=$1
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Session-Select] $msg" >> "${LOG_FILE}" 2>/dev/null || true
-    echo "$msg" | systemd-cat -t "steamos-diy"
+    # Usiamo il tag [SYS] per coerenza con il launcher
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SYS] [SELECT] $msg" >> "${LOG_FILE}" 2>/dev/null || true
+    echo "[SELECT] $msg" | systemd-cat -t "steamos-diy"
 }
 
 TARGET_ENV=${1:-""}
 DETACH_FLAG=${2:-""}
 
 # --- 2. LOGICA DI DISTACCO (Agnostica) ---
+# Impedisce che la chiusura della sessione corrente uccida lo script di switch
 if [[ "$DETACH_FLAG" != "--detached" ]]; then
     log "Detaching session switch for user: ${STEAMOS_USER}..."
-    systemd-run --user --collect "${BIN_SESSION_SELECT}" "$TARGET_ENV" --detached
+    # Usiamo la variabile definita nel Master per il percorso del binario
+    systemd-run --user --collect "${BIN_SESSION_SELECT:-$0}" "$TARGET_ENV" --detached
     exit 0
 fi
 
-log "--- SWITCH INITIATED --- Target Environment: $TARGET_ENV"
+log "--- SWITCH INITIATED --- Target: $TARGET_ENV"
 
-# --- 3. ESECUZIONE TRANSIZIONE CON PROTEZIONE ---
+# --- 3. ESECUZIONE TRANSIZIONE ---
 case "$TARGET_ENV" in
     "plasma" | "desktop")
         if systemctl is-active --quiet "steamos-desktop@${STEAMOS_USER}.service"; then
-            log "Notice: Desktop Mode is already active. Ignoring request."
+            log "Desktop Mode is already active. No action needed."
             exit 0
         fi
-        log "Transitioning to Desktop Mode..."
+        log "Switching to Desktop Mode..."
+        # Il sudo è necessario per gestire i service di sistema dall'utente
         sudo /usr/bin/systemctl start "steamos-desktop@${STEAMOS_USER}.service"
         ;;
 
     "gamescope" | "steam" | "game")
         if systemctl is-active --quiet "steamos-gamemode@${STEAMOS_USER}.service"; then
-            log "Notice: Game Mode is already active. Ignoring request."
+            log "Game Mode is already active. No action needed."
             exit 0
         fi
-        log "Transitioning to Game Mode..."
+        log "Switching to Game Mode..."
         sudo /usr/bin/systemctl start "steamos-gamemode@${STEAMOS_USER}.service"
         ;;
 
     *)
-        log "Error: Invalid target '$TARGET_ENV' requested."
+        log "Error: Invalid target '$TARGET_ENV'."
         exit 1
         ;;
 esac
-
-log "Request sent to systemd. Transition in progress."
