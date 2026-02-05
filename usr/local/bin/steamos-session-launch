@@ -1,15 +1,13 @@
 #!/bin/bash
 # =============================================================================
-# SteamMachine-DIY - SDY Game Wrapper
+# SteamMachine-DIY - steamos-session-launch
 # =============================================================================
 # Script:      sdy
 # Version:     4.0.0
 # Philosophy:  KISS (Keep It Simple, Stupid)
-# Description: Intelligent wrapper for Steam games. Handles per-game 
-#              configurations, command injection (prefixes/args), and 
-#              synchronizes diagnostic markers with Steam logs.
+# Description: Minimal environment with ACTIVE recovery watchdog.
 # Repository: https://github.com/dlucca1986/SteamMachine-DIY
-# Path:        /usr/local/bin/sdy
+# Path:        /usr/local/bin/steamos-session-launch
 # License: MIT
 # =============================================================================
 
