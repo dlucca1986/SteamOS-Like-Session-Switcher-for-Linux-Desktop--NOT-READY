@@ -1,64 +1,55 @@
 #!/bin/bash
 # =============================================================================
-# SteamMachine-DIY - Intelligent Session Selector
+# SteamOS-DIY - Intelligent Session Selector (Agnostic & Safe Edition)
 # =============================================================================
-# Script: steamos-session-select
-# Version: 3.1.0
-# Description: Handles transitions between Gaming Mode (Gamescope) and 
-#              Desktop Mode (Plasma). Optimized for TTY1 execution and 
-#              process detachment to prevent session hangups.
-# Repository: https://github.com/dlucca1986/SteamMachine-DIY
-# Path:        /usr/local/bin/steamos-session-select
-# License: MIT
-# =============================================================================
+set -eou pipefail
 
-# --- Configuration & Logging ---
-readonly LOG_FILE="/var/log/steamos-diy.log"
-readonly LOG_TAG="Session-Select"
+# --- 1. CARICAMENTO GERARCHICO (SSoT) ---
+source "/usr/share/steamos-diy/defaults" 2>/dev/null || { echo "Defaults missing"; exit 1; }
+source "/etc/default/steamos-diy" 2>/dev/null || { echo "Master Config missing"; exit 1; }
 
-# Standardized logging function
-log_message() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$LOG_TAG] $1" >> "$LOG_FILE" 2>/dev/null || true
+log() {
+    local msg=$1
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Session-Select] $msg" >> "${LOG_FILE}" 2>/dev/null || true
+    echo "$msg" | systemd-cat -t "steamos-diy"
 }
 
-# --- Environment Detection ---
-REAL_USER=$(id -un)
 TARGET_ENV=${1:-""}
 DETACH_FLAG=${2:-""}
 
-# --- Detachment Logic ---
-# Essential: The script must survive the termination of the calling session.
-# We use systemd-run to spawn a transient service that persists during the switch.
+# --- 2. LOGICA DI DISTACCO (Agnostica) ---
 if [[ "$DETACH_FLAG" != "--detached" ]]; then
-    log_message "Detaching session switch for user: $REAL_USER..."
-    # --collect ensures the transient service is cleaned up after execution
-    systemd-run --user --collect /usr/local/bin/steamos-session-select "$TARGET_ENV" --detached
+    log "Detaching session switch for user: ${STEAMOS_USER}..."
+    systemd-run --user --collect "${BIN_SESSION_SELECT}" "$TARGET_ENV" --detached
     exit 0
 fi
 
-log_message "--- SWITCH INITIATED --- Target Environment: $TARGET_ENV"
+log "--- SWITCH INITIATED --- Target Environment: $TARGET_ENV"
 
-# --- Transition Execution ---
-# Leveraging 'Conflicts=' in systemd unit files:
-# Starting one service automatically stops the conflicting one.
+# --- 3. ESECUZIONE TRANSIZIONE CON PROTEZIONE ---
 case "$TARGET_ENV" in
     "plasma" | "desktop")
-        log_message "Transitioning to Desktop Mode..."
-        # Starting the desktop service will stop the gamemode service via Conflicts
-        sudo /usr/bin/systemctl start "steamos-desktop@$REAL_USER.service"
+        if systemctl is-active --quiet "steamos-desktop@${STEAMOS_USER}.service"; then
+            log "Notice: Desktop Mode is already active. Ignoring request."
+            exit 0
+        fi
+        log "Transitioning to Desktop Mode..."
+        sudo /usr/bin/systemctl start "steamos-desktop@${STEAMOS_USER}.service"
         ;;
 
-    "gamescope" | "steam")
-        log_message "Transitioning to Game Mode..."
-        # Starting the gamemode service will stop the desktop service via Conflicts
-        sudo /usr/bin/systemctl start "steamos-gamemode@$REAL_USER.service"
+    "gamescope" | "steam" | "game")
+        if systemctl is-active --quiet "steamos-gamemode@${STEAMOS_USER}.service"; then
+            log "Notice: Game Mode is already active. Ignoring request."
+            exit 0
+        fi
+        log "Transitioning to Game Mode..."
+        sudo /usr/bin/systemctl start "steamos-gamemode@${STEAMOS_USER}.service"
         ;;
 
     *)
-        log_message "Error: Invalid target '$TARGET_ENV' requested by $REAL_USER."
-        echo "Usage: steamos-session-select [desktop|steam]"
+        log "Error: Invalid target '$TARGET_ENV' requested."
         exit 1
         ;;
 esac
 
-log_message "Request sent to systemd. Transition in progress on primary VT."
+log "Request sent to systemd. Transition in progress."
