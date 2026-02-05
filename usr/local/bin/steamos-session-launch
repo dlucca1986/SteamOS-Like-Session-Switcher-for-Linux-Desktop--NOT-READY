@@ -1,138 +1,91 @@
 #!/bin/bash
-# =============================================================================
-# SteamMachine-DIY - Intelligent Universal Launcher
-# =============================================================================
-# Script: steamos-session-launch
-# Version: 3.6.0
-# Description: Minimal environment with ACTIVE recovery watchdog.
-# Repository: https://github.com/dlucca1986/SteamMachine-DIY
-## Path:        /usr/local/bin/steamos-session-launch
-# License: MIT
-# =========================================================
-# =============================================================================
-set -eou pipefail
+set -uo pipefail
 
-# --- 1. CONFIGURATION & AGNOSTIC ENVIRONMENT ---
-GLOBAL_CONFIG="/etc/default/steamos-diy"
-CURRENT_UID=$(id -u)
-export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${CURRENT_UID}/bus"
+# --- 1. CARICAMENTO GERARCHICO (SSoT) ---
+# Carica prima i defaults di sistema, poi il master config, poi l'user config
+source "/usr/share/steamos-diy/defaults" 2>/dev/null || { echo "Defaults missing"; exit 1; }
+source "/etc/default/steamos-diy" 2>/dev/null || { echo "Master Config missing"; exit 1; }
+[[ -f "${CONF_DIR}/config" ]] && source "${CONF_DIR}/config"
 
-if [[ -f "$GLOBAL_CONFIG" ]]; then
-    set -a
-    source "$GLOBAL_CONFIG"
-    set +a
-else
-    echo "[ERROR] Global configuration not found at $GLOBAL_CONFIG"
-    exit 1
-fi
-
-readonly LOG_FILE="${LOG_FILE:-/var/log/steamos-diy.log}"
-readonly STEAM_LOG_PATH="${STEAM_LOG:-$HOME/.local/share/Steam/logs/console-linux.txt}"
-readonly CONFIG_FILE="${CONF_DIR:-$HOME/.config/steamos-diy}/config"
-
+# Funzione Log Uniformata (Soluzione A - Inlined)
 log() {
-    local tag="$1"
-    local msg="$2"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${LOG_TAG:-[SteamOS-DIY]} [$tag] $msg" >> "$LOG_FILE" 2>/dev/null || true
+    local level=$1
+    local msg=$2
+    # Scrittura su file (se accessibile) e su Journal
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SDY] [$level] $msg" >> "${LOG_FILE}" 2>/dev/null || true
+    echo "[$level] $msg" | systemd-cat -t "steamos-diy"
 }
-
-# --- GRACEFUL SHUTDOWN (SIGTERM) ---
-cleanup_session() {
-    log "EXIT" "Termination signal received. Initiating graceful shutdown..."
-    if [[ -n "${G_PID:-}" ]]; then
-        kill -TERM "$G_PID" 2>/dev/null || true
-    fi
-    local timeout=3
-    while [ $timeout -gt 0 ] && pgrep -x "gamescope" > /dev/null; do
-        sleep 1
-        ((timeout--))
-    done
-    log "EXIT" "All processes synchronized and closed. Session ended."
-    exit 0
-}
-
-trap cleanup_session SIGINT SIGTERM
-
-echo "========================================" >> "$LOG_FILE"
-log "INIT" "New session initiated for user: $USER (UID: $CURRENT_UID)"
 
 # --- 2. HARDWARE DETECTION ---
-DRM_CONN=$(grep -l "^connected" /sys/class/drm/card*-*/status | head -n1 || true)
-DRM_PATH=$(dirname "$DRM_CONN")
-NATIVE_RES=$(head -n1 "$DRM_PATH/modes" 2>/dev/null || echo "1280x720")
+# Agnostico: non diamo per scontata la risoluzione, la cerchiamo
+DRM_PATH=$(dirname $(grep -l "^connected" /sys/class/drm/card*-*/status | head -n1) 2>/dev/null || echo "")
+NATIVE_RES=$(head -n1 "$DRM_PATH/modes" 2>/dev/null || echo "${DEFAULT_RES}")
 HW_W=${NATIVE_RES%x*}
 HW_H=${NATIVE_RES#*x}
 
-# --- 3. LOCAL USER CONFIGURATION ---
-[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
-
-# --- 4. DYNAMIC ARGUMENTS CONSTRUCTION & SAFETY CAP ---
-G_OPTS=("${G_OPTS_BASE:--e}")
 FINAL_W=${TARGET_WIDTH:-$HW_W}
 FINAL_H=${TARGET_HEIGHT:-$HW_H}
-FINAL_R=${REFRESH_RATE:-60}
 
-# [From 3.1.0]: Safety Cap - Prevent resolution exceeding hardware
-if [ "$FINAL_W" -gt "$HW_W" ] || [ "$FINAL_H" -gt "$HW_H" ]; then
-    log "WARN" "Requested ${FINAL_W}x${FINAL_H} exceeds hardware. Capping to native."
-    FINAL_W=$HW_W; FINAL_H=$HW_H; FINAL_R=60
-fi
+# --- 3. GAMESCOPE SETUP ---
+G_OPTS=("-e" "-W" "$FINAL_W" "-H" "$FINAL_H")
 
-G_OPTS+=("-W" "$FINAL_W" "-H" "$FINAL_H" "-r" "$FINAL_R")
-
-# Feature Toggles
-[[ "${ENABLE_HDR:-0}" == "1" ]] && G_OPTS+=("--hdr-enabled")
-[[ "${ENABLE_VRR:-0}" == "1" ]] && G_OPTS+=("--adaptive-sync")
+# Traduttore variabili Master (uniformato al nuovo SSoT)
 [[ "${ENABLE_MANGOAPP:-0}" == "1" ]] && G_OPTS+=("--mangoapp")
+[[ "${ENABLE_HDR:-0}" == "1" ]]      && G_OPTS+=("--hdr-enabled")
+[[ "${ENABLE_VRR:-0}" == "1" ]]      && G_OPTS+=("--adaptive-sync")
+[[ "${ENABLE_FSR:-0}" == "1" ]]      && G_OPTS+=("-F" "fsr")
+[[ -n "${REFRESH_RATE:-}" ]]        && G_OPTS+=("-r" "$REFRESH_RATE")
 
-# [From 3.1.0]: Support for manual Extra Args
+# Gestione argomenti extra (Agnostico verso Gamescope)
 if [[ -n "${GAMESCOPE_ARGS:-}" ]]; then
-    read -r -a EXTRA <<< "$GAMESCOPE_ARGS"
-    G_OPTS+=("${EXTRA[@]}")
+    read -r -a EXTRA_ARGS <<< "$GAMESCOPE_ARGS"
+    G_OPTS+=("${EXTRA_ARGS[@]}")
 fi
 
-log "LAUNCH" "Gamescope OPTS: ${G_OPTS[*]}"
-
-# --- 5. EXECUTION & WATCHDOG ---
-START_TIME=$(date +%s)
-G_EXIT_CODE=0
-
-# [From 3.5.2]: Background execution with PID monitoring
-stdbuf -oL -eL gamescope "${G_OPTS[@]}" -- \
-    steam -steamdeck -steamos3 >> "$LOG_FILE" 2>&1 &
-
-G_PID=$!
-# Trigger per comandi post-inizializzazione (es. VRR Fix)
-if [[ -n "${POST_LAUNCH_CMD:-}" ]]; then
-    log "POST" "Scheduling post-launch command: $POST_LAUNCH_CMD"
-    (sleep 5; eval "$POST_LAUNCH_CMD" >> "$LOG_FILE" 2>&1) &
-fi
-wait "$G_PID" || G_EXIT_CODE=$?
-
-RUNTIME=$(( $(date +%s) - START_TIME ))
-
-# LOGICA DI RECOVERY
-if [ "$G_EXIT_CODE" -ne 0 ] && [ "$RUNTIME" -lt 10 ]; then
-    log "CRITICAL" "Early crash detected after ${RUNTIME}s. RECOVERING..."
-
-    # [From 3.5.2]: Forced cleanup before recovery launch
-    pgrep -x "gamescope" | xargs kill -9 2>/dev/null || true
-
-    log "RECOVERY" "Launching Safe Mode at ${HW_W}x${HW_H}@60Hz"
-    stdbuf -oL -eL gamescope -e -W "$HW_W" -H "$HW_H" -r 60 -- \
-        steam -steamdeck -steamos3 >> "$LOG_FILE" 2>&1 || G_EXIT_CODE=$?
-else
-    log "EXIT" "Session finished naturally. Exit code: $G_EXIT_CODE"
-fi
-
-# --- 6. STEAM ERROR EXTRACTOR (SDY Marker) ---
-# [From 3.1.0]: Extract context if the session failed
-if [ "$G_EXIT_CODE" -ne 0 ]; then
-    if [[ -f "$STEAM_LOG_PATH" ]]; then
-        LAST_START_MARKER=$(grep -a "SDY_REATTIVO_START" "$STEAM_LOG_PATH" | tail -n 1 || true)
-        if [[ -n "$LAST_START_MARKER" ]]; then
-            log "STEAM_ERR" ">>> Extracting diagnostic context from Steam Log <<<"
-            grep -a -F -A 30 "$LAST_START_MARKER" "$STEAM_LOG_PATH" >> "$LOG_FILE" || true
-        fi
+# --- 4. WATCHDOG & SIGNALS ---
+cleanup_session() {
+    log "EXIT" "Shutdown signal received. Cleaning up..."
+    if [[ -n "${G_PID:-}" ]]; then
+        kill -TERM "$G_PID" 2>/dev/null
+        # Ciclo di attesa ultra-lean
+        for i in {1..2}; do kill -0 "$G_PID" 2>/dev/null || break; sleep 1; done
     fi
+    exit 0
+}
+trap cleanup_session SIGINT SIGTERM
+
+# --- 5. EXECUTION LOOP ---
+MAX_RETRIES=2
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    CUR_STEAM="${STEAM_CMD}"
+    [[ $RETRY_COUNT -gt 0 ]] && CUR_STEAM="${STEAM_CMD} -autoconfig"
+
+    log "LAUNCH" "Starting Gamescope: ${FINAL_W}x${FINAL_H} (Try: $((RETRY_COUNT + 1)))"
+    START=$(date +%s)
+
+    # Nota: Usiamo variabili per i comandi, non percorsi fissi
+    gamescope "${G_OPTS[@]}" -- env ${CUR_STEAM} >> "${LOG_FILE}" 2>&1 &
+    G_PID=$!
+    wait "$G_PID" || true
+
+    # Logica crash: se dura meno di 10 secondi è un fallimento
+    if [ $(( $(date +%s) - START )) -lt 10 ]; then
+        ((RETRY_COUNT++))
+        log "WATCHDOG" "Crash detected. Attempt ${RETRY_COUNT}/${MAX_RETRIES}"
+        sleep 2
+    else
+        # Uscita pulita dell'utente
+        log "EXIT" "Session ended normally."
+        exit 0
+    fi
+done
+
+# --- 6. FALLBACK (Enterprise Logic) ---
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+    log "CRITICAL" "Max retries reached. Failing service to trigger OnFailure."
+    # NON chiamiamo session-select. Usciamo con errore.
+    # Systemd si occuperà di avviare Plasma tramite OnFailure nel service.
+    exit 1
 fi
