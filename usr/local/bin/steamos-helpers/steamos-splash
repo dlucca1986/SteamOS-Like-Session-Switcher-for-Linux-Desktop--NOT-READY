@@ -1,62 +1,59 @@
 #!/bin/bash
-# =============================================================================
-# SteamOS-DIY - System Splash (v4.2.0)
-# =============================================================================
 set -uo pipefail
 
-# --- 1. CARICAMENTO CONFIGURAZIONE MASTER ---
+# --- 1. CONFIGURAZIONE & FALLBACK ---
 GLOBAL_CONF="/etc/default/steamos-diy"
-if [[ -f "$GLOBAL_CONF" ]]; then
-    source "$GLOBAL_CONF"
-else
-    exit 1
-fi
+[ -f "$GLOBAL_CONF" ] && source "$GLOBAL_CONF"
 
-# Fallback in caso le variabili non siano nel Master Config
 SYSTEM_NAME="${SYSTEM_NAME:-SteamOS-DIY}"
-DELAY_SHORT="${SPLASH_DELAY_SHORT:-1.5}"
-DELAY_LONG="${SPLASH_DELAY_LONG:-3.0}"
-STEAMOS_USER="${STEAMOS_USER:-user}"
+DELAY_SHORT="${SPLASH_DELAY_SHORT:-1.0}"
+DELAY_LONG="${SPLASH_DELAY_LONG:-2.5}"
+LOCK_FILE="/run/steamos-splash.pid" # Usiamo /run che è in RAM (sparisce al reboot)
 
-LOCK_FILE="/tmp/steamos-splash.lock"
+# --- 2. GESTIONE DETERMINISTICA DEL LOCK ---
+if [[ -f "$LOCK_FILE" ]]; then
+    OLD_PID=$(cat "$LOCK_FILE")
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+        exit 0 # Un'altra istanza è già attiva, esci silenziosamente
+    fi
+fi
+echo $$ > "$LOCK_FILE" # Scriviamo il nostro PID
+
+# --- 3. FORZATURA TTY & RESET ---
+# Forza il passaggio alla TTY1 e pulisce tutto
+/usr/bin/chvt 1 2>/dev/null || true
+echo -ne "\033c" > /dev/tty1
+setterm -cursor off > /dev/tty1 || true
 
 tty_out() {
-    # Pulizia preventiva della riga per evitare sovrapposizioni
-    echo -ne "\033[2K" > /dev/tty 2>/dev/null || true
-    echo -ne "$1" > /dev/tty 2>/dev/null || echo -ne "$1"
+    echo -ne "$1" > /dev/tty1
 }
 
-# Reset totale e nascondi cursore
-tty_out '\033c'
-setterm -cursor off 2>/dev/null || true
-
-# --- 2. LOGICA STATI ---
+# --- 4. LOGICA DEGLI STATI ---
 CYAN='\e[1;36m'; GREEN='\e[1;32m'; RED='\e[1;31m'; YELLOW='\e[1;33m'
 WHITE='\e[1;37m'; GRAY='\e[1;30m'; RESET='\e[0m'
 PAD="            "
 
-case "${1:-}" in
-    "game")     rm -f "$LOCK_FILE" 2>/dev/null; COLOR=$GREEN; MODE="Game Mode"; STAT="Launching..."; DELAY=$DELAY_SHORT ;;
-    "desktop")  rm -f "$LOCK_FILE" 2>/dev/null; COLOR=$CYAN;  MODE="Desktop Mode"; STAT="Switching..."; DELAY=$DELAY_SHORT ;;
-    "reboot")   COLOR=$YELLOW; MODE="System"; STAT="Rebooting..."; DELAY=1.0 ;;
-    "shutdown") COLOR=$RED;    MODE="System"; STAT="Shutting down..."; DELAY=1.0 ;;
+MODE_ARG="${1:-auto}"
+
+case "$MODE_ARG" in
+    "game")     COLOR=$GREEN;  MODE="Game Mode";    STAT="Launching..."; DELAY=$DELAY_SHORT ;;
+    "desktop")  COLOR=$CYAN;   MODE="Desktop Mode"; STAT="Switching..."; DELAY=$DELAY_SHORT ;;
     *)
-        # Controllo automatico se chiamato senza argomenti
+        # Auto-rilevamento deterministico via Systemd
         if systemctl list-jobs | grep -q "reboot.target"; then
             COLOR=$YELLOW; MODE="System"; STAT="Rebooting..."; DELAY=$DELAY_LONG
         elif systemctl list-jobs | grep -qE "shutdown.target|poweroff.target|halt.target"; then
             COLOR=$RED;    MODE="System"; STAT="Shutting down..."; DELAY=$DELAY_LONG
         else
-            [[ -f "$LOCK_FILE" ]] && exit 0
-            touch "$LOCK_FILE" 2>/dev/null
             COLOR=$WHITE;  MODE="Wait";   STAT="Processing..."; DELAY=$DELAY_SHORT
         fi
         ;;
 esac
 
-# --- 3. RENDERING (ASCII Art Steam-ish) ---
+# --- 5. RENDERING ---
 OUT="\n\n\n\n\n\n"
-OUT+="${PAD}${COLOR}      ◢◤  ◢◤      ${RESET}   ${WHITE}${STEAMOS_USER}${RESET}@${WHITE}${SYSTEM_NAME}${RESET}\n"
+OUT+="${PAD}${COLOR}      ◢◤  ◢◤      ${RESET}   ${WHITE}${STEAMOS_USER:-user}${RESET}@${WHITE}${SYSTEM_NAME}${RESET}\n"
 OUT+="${PAD}${COLOR}    ◢◤      ◢◤    ${RESET}   ${GRAY}-------------------${RESET}\n"
 OUT+="${PAD}${COLOR}  ◢◤          ◢◤  ${RESET}   ${WHITE}OS    : ${SYSTEM_NAME}\n"
 OUT+="${PAD}${COLOR}    ◢◤      ◢◤    ${RESET}   ${WHITE}Mode  : ${COLOR}${MODE}${RESET}\n"
@@ -64,3 +61,6 @@ OUT+="${PAD}${COLOR}      ◢◤  ◢◤      ${RESET}   ${WHITE}Status: ${GRAY}
 
 tty_out "$OUT"
 sleep "${DELAY}"
+
+# Pulizia finale
+rm -f "$LOCK_FILE"
