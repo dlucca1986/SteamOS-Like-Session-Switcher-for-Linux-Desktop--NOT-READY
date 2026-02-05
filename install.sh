@@ -84,7 +84,7 @@ deploy_core() {
 }
 
 setup_configs() {
-    info "Configuring SSoT Identity & Autologin..."
+    info "Configuring SSoT Identity, Autologin & Final Splash..."
 
     # 1. Master Config
     if [ -f "$SOURCE_DIR/etc/default/steamos-diy" ]; then
@@ -106,7 +106,13 @@ setup_configs() {
         sed -i "s/\[USERNAME\]/$REAL_USER/g" "$AUTO_DIR/autologin.conf"
     fi
 
-    # 4. Home Config & Logs
+    # 4. Final Splash (System-Shutdown Hook)
+    # Creiamo il link affinché lo splash sia l'ultimo respiro del sistema
+    local SHUTDOWN_HOOK_DIR="/usr/lib/systemd/system-shutdown"
+    mkdir -p "$SHUTDOWN_HOOK_DIR"
+    ln -sf "$HELPERS_DEST/steamos-splash" "$SHUTDOWN_HOOK_DIR/steamos-diy-final"
+
+    # 5. Home Config & Logs
     mkdir -p "$USER_CONF_DEST/games"
     [ -d "$SOURCE_DIR/config" ] && cp -r "$SOURCE_DIR/config/"* "$USER_CONF_DEST/"
     touch "$USER_CONF_DEST/session.log"
