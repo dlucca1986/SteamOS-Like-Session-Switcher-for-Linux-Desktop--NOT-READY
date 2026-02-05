@@ -29,7 +29,7 @@ Environment=GTK_USE_PORTAL=0
 
 # STARTUP
 ExecStartPre=-/usr/bin/bash -c "/usr/bin/rm -f /run/user/%U/wayland-0*"
-ExecStartPre=-/usr/bin/bash -c "clear > /dev/tty1"
+#ExecStartPre=-/usr/bin/bash -c "clear > /dev/tty1"
 ExecStartPre=-${BIN_SPLASH} desktop
 
 # SESSION
