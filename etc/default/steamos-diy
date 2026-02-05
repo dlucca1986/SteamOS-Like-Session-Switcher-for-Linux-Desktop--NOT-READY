@@ -26,6 +26,9 @@ export HELPER_DIR="${BIN_DIR}/steamos-helpers"
 export BIN_SESSION_LAUNCH="${BIN_DIR}/steamos-session-launch"
 export BIN_SESSION_SELECT="${BIN_DIR}/steamos-session-select"
 
-# Wrapper e Splash
-export BIN_SDY="${BIN_DIR}/sdy"
-export BIN_SPLASH="${HELPER_DIR}/steamos-splash"
+# --- 5. SYSTEM CUSTOMIZATION (Per lo Splash) ---
+# Il nome che apparirà nel logo ASCII
+export SYSTEM_NAME="SteamOS-DIY"
+# Delay dello splash (in secondi)
+export SPLASH_DELAY_SHORT="1.0"
+export SPLASH_DELAY_LONG="2.5"
