@@ -15,7 +15,6 @@ set -uo pipefail
 
 # --- 1. CARICAMENTO GERARCHICO (SSoT) ---
 # Carica prima i defaults di sistema, poi il master config, poi l'user config
-source "/usr/share/steamos-diy/defaults" 2>/dev/null || { echo "Defaults missing"; exit 1; }
 source "/etc/default/steamos-diy" 2>/dev/null || { echo "Master Config missing"; exit 1; }
 [[ -f "${CONF_DIR}/config" ]] && source "${CONF_DIR}/config"
 
