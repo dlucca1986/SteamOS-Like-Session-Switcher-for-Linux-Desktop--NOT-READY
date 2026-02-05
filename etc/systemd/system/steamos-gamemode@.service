@@ -22,7 +22,7 @@ TTYReset=yes
 TTYVHangup=yes
 
 # STARTUP
-ExecStartPre=-/usr/bin/bash -c "clear > /dev/tty1"
+#ExecStartPre=-/usr/bin/bash -c "clear > /dev/tty1"
 ExecStartPre=-${BIN_SPLASH} game
 ExecStart=${BIN_SESSION_LAUNCH}
 
