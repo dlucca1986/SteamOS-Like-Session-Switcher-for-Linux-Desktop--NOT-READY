@@ -1,16 +1,15 @@
 #!/bin/bash
 # =============================================================================
-# SteamMachine-DIY - steamos-session-select (v4.0.0)
+# SteamMachine-DIY - steamos-session-select
 # =============================================================================
 set -eou pipefail
 
 # --- 1. CARICAMENTO AGNOSTICO (SSoT) ---
-source "/etc/default/steamos-diy" 2>/dev/null || { echo "Critical Error: Master Config missing"; exit 1; }
-# Nota: qui non serve caricare il config utente perché gestiamo solo i service di sistema
+# Ora carichiamo SOLO il Master di sistema.
+source "/etc/default/steamos-diy" 2>/dev/null || { echo "Master Config missing"; exit 1; }
 
 log() {
     local msg=$1
-    # Usiamo il tag [SYS] per coerenza con il launcher
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SYS] [SELECT] $msg" >> "${LOG_FILE}" 2>/dev/null || true
     echo "[SELECT] $msg" | systemd-cat -t "steamos-diy"
 }
@@ -18,35 +17,27 @@ log() {
 TARGET_ENV=${1:-""}
 DETACH_FLAG=${2:-""}
 
-# --- 2. LOGICA DI DISTACCO (Agnostica) ---
-# Impedisce che la chiusura della sessione corrente uccida lo script di switch
+# --- 2. LOGICA DI DISTACCO (Verificata) ---
 if [[ "$DETACH_FLAG" != "--detached" ]]; then
-    log "Detaching session switch for user: ${STEAMOS_USER}..."
-    # Usiamo la variabile definita nel Master per il percorso del binario
+    log "Detaching switch request for ${STEAMOS_USER}..."
+    
+    # La prova del nove: usiamo la variabile del Master con fallback di sicurezza
+    # Questo garantisce che systemd-run sappia SEMPRE cosa eseguire.
     systemd-run --user --collect "${BIN_SESSION_SELECT:-$0}" "$TARGET_ENV" --detached
     exit 0
 fi
 
 log "--- SWITCH INITIATED --- Target: $TARGET_ENV"
 
-# --- 3. ESECUZIONE TRANSIZIONE ---
+# --- 3. TRANSIZIONE ---
 case "$TARGET_ENV" in
     "plasma" | "desktop")
-        if systemctl is-active --quiet "steamos-desktop@${STEAMOS_USER}.service"; then
-            log "Desktop Mode is already active. No action needed."
-            exit 0
-        fi
-        log "Switching to Desktop Mode..."
-        # Il sudo è necessario per gestire i service di sistema dall'utente
+        log "Activating Desktop Mode via Systemd..."
         sudo /usr/bin/systemctl start "steamos-desktop@${STEAMOS_USER}.service"
         ;;
 
     "gamescope" | "steam" | "game")
-        if systemctl is-active --quiet "steamos-gamemode@${STEAMOS_USER}.service"; then
-            log "Game Mode is already active. No action needed."
-            exit 0
-        fi
-        log "Switching to Game Mode..."
+        log "Activating Game Mode via Systemd..."
         sudo /usr/bin/systemctl start "steamos-gamemode@${STEAMOS_USER}.service"
         ;;
 
