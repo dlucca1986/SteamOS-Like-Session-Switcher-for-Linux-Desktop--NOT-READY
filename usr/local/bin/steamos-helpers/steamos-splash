@@ -8,19 +8,19 @@ GLOBAL_CONF="/etc/default/steamos-diy"
 SYSTEM_NAME="${SYSTEM_NAME:-SteamOS-DIY}"
 DELAY_SHORT="${SPLASH_DELAY_SHORT:-1.0}"
 DELAY_LONG="${SPLASH_DELAY_LONG:-2.5}"
-LOCK_FILE="/run/steamos-splash.pid" # Usiamo /run che è in RAM (sparisce al reboot)
+LOCK_FILE="/run/steamos-splash.pid"
 
 # --- 2. GESTIONE DETERMINISTICA DEL LOCK ---
 if [[ -f "$LOCK_FILE" ]]; then
     OLD_PID=$(cat "$LOCK_FILE")
     if kill -0 "$OLD_PID" 2>/dev/null; then
-        exit 0 # Un'altra istanza è già attiva, esci silenziosamente
+        exit 0 
     fi
 fi
-echo $$ > "$LOCK_FILE" # Scriviamo il nostro PID
+echo $$ > "$LOCK_FILE"
 
 # --- 3. FORZATURA TTY & RESET ---
-# Forza il passaggio alla TTY1 e pulisce tutto
+# Pulizia immediata: ogni chiamata allo splash parte dal nero assoluto
 /usr/bin/chvt 1 2>/dev/null || true
 echo -ne "\033c" > /dev/tty1
 setterm -cursor off > /dev/tty1 || true
@@ -40,18 +40,22 @@ case "$MODE_ARG" in
     "game")     COLOR=$GREEN;  MODE="Game Mode";    STAT="Launching..."; DELAY=$DELAY_SHORT ;;
     "desktop")  COLOR=$CYAN;   MODE="Desktop Mode"; STAT="Switching..."; DELAY=$DELAY_SHORT ;;
     *)
-        # Auto-rilevamento deterministico via Systemd
+        # AUTO-RILEVAMENTO (Shutdown / Reboot / Switch)
         if systemctl list-jobs | grep -q "reboot.target"; then
             COLOR=$YELLOW; MODE="System"; STAT="Rebooting..."; DELAY=$DELAY_LONG
         elif systemctl list-jobs | grep -qE "shutdown.target|poweroff.target|halt.target"; then
             COLOR=$RED;    MODE="System"; STAT="Shutting down..."; DELAY=$DELAY_LONG
         else
-            COLOR=$WHITE;  MODE="Wait";   STAT="Processing..."; DELAY=$DELAY_SHORT
+            # --- CASO SWITCH (TOTAL BLACK) ---
+            # Se siamo qui, il servizio è morto ma il sistema resta acceso (Switching session).
+            # Abbiamo già fatto 'clear' (\033c) sopra, quindi usciamo e lasciamo lo schermo nero.
+            rm -f "$LOCK_FILE"
+            exit 0
         fi
         ;;
 esac
 
-# --- 5. RENDERING ---
+# --- 5. RENDERING (Viene eseguito solo per Game, Desktop, Reboot e Shutdown) ---
 OUT="\n\n\n\n\n\n"
 OUT+="${PAD}${COLOR}      ◢◤  ◢◤      ${RESET}   ${WHITE}${STEAMOS_USER:-user}${RESET}@${WHITE}${SYSTEM_NAME}${RESET}\n"
 OUT+="${PAD}${COLOR}    ◢◤      ◢◤    ${RESET}   ${GRAY}-------------------${RESET}\n"
