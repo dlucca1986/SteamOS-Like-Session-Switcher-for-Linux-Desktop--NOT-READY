@@ -20,19 +20,14 @@ fi
 echo $$ > "$LOCK_FILE"
 
 # --- 3. FORZATURA TTY & RESET ---
-# Pulizia immediata: ogni chiamata allo splash parte dal nero assoluto
+# Pulizia profonda: reset terminale e cursore invisibile
 /usr/bin/chvt 1 2>/dev/null || true
 echo -ne "\033c" > /dev/tty1
 setterm -cursor off > /dev/tty1 || true
 
-tty_out() {
-    echo -ne "$1" > /dev/tty1
-}
-
 # --- 4. LOGICA DEGLI STATI ---
 CYAN='\e[1;36m'; GREEN='\e[1;32m'; RED='\e[1;31m'; YELLOW='\e[1;33m'
 WHITE='\e[1;37m'; GRAY='\e[1;30m'; RESET='\e[0m'
-PAD="            "
 
 MODE_ARG="${1:-auto}"
 
@@ -40,30 +35,47 @@ case "$MODE_ARG" in
     "game")     COLOR=$GREEN;  MODE="Game Mode";    STAT="Launching..."; DELAY=$DELAY_SHORT ;;
     "desktop")  COLOR=$CYAN;   MODE="Desktop Mode"; STAT="Switching..."; DELAY=$DELAY_SHORT ;;
     *)
-        # AUTO-RILEVAMENTO (Shutdown / Reboot / Switch)
         if systemctl list-jobs | grep -q "reboot.target"; then
             COLOR=$YELLOW; MODE="System"; STAT="Rebooting..."; DELAY=$DELAY_LONG
         elif systemctl list-jobs | grep -qE "shutdown.target|poweroff.target|halt.target"; then
             COLOR=$RED;    MODE="System"; STAT="Shutting down..."; DELAY=$DELAY_LONG
         else
-            # --- CASO SWITCH (TOTAL BLACK) ---
-            # Se siamo qui, il servizio è morto ma il sistema resta acceso (Switching session).
-            # Abbiamo già fatto 'clear' (\033c) sopra, quindi usciamo e lasciamo lo schermo nero.
+            # CASO SWITCH (TOTAL BLACK)
             rm -f "$LOCK_FILE"
             exit 0
         fi
         ;;
 esac
 
-# --- 5. RENDERING (Viene eseguito solo per Game, Desktop, Reboot e Shutdown) ---
-OUT="\n\n\n\n\n\n"
-OUT+="${PAD}${COLOR}      ◢◤  ◢◤      ${RESET}   ${WHITE}${STEAMOS_USER:-user}${RESET}@${WHITE}${SYSTEM_NAME}${RESET}\n"
-OUT+="${PAD}${COLOR}    ◢◤      ◢◤    ${RESET}   ${GRAY}-------------------${RESET}\n"
-OUT+="${PAD}${COLOR}  ◢◤          ◢◤  ${RESET}   ${WHITE}OS    : ${SYSTEM_NAME}\n"
-OUT+="${PAD}${COLOR}    ◢◤      ◢◤    ${RESET}   ${WHITE}Mode  : ${COLOR}${MODE}${RESET}\n"
-OUT+="${PAD}${COLOR}      ◢◤  ◢◤      ${RESET}   ${WHITE}Status: ${GRAY}${STAT}${RESET}\n"
+# --- 5. RENDERING ADATTIVO (Centrato per TV/Monitor) ---
+# Rileviamo le dimensioni attuali della TTY
+COLUMNS=$(tput cols 2>/dev/null || echo 80)
+LINES=$(tput lines 2>/dev/null || echo 24)
 
-tty_out "$OUT"
+# Il blocco è largo 52 caratteri e alto 5 righe
+OFFSET_X=$(( (COLUMNS - 52) / 2 ))
+OFFSET_Y=$(( (LINES - 5) / 2 ))
+
+# Protezione per valori negativi su schermi piccolissimi
+[ $OFFSET_X -lt 0 ] && OFFSET_X=0
+[ $OFFSET_Y -lt 0 ] && OFFSET_Y=0
+
+# Generazione Padding
+PADDING_Y=""
+for ((i=0; i<OFFSET_Y; i++)); do PADDING_Y+="\n"; done
+PAD_X=""
+for ((i=0; i<OFFSET_X; i++)); do PAD_X+=" "; done
+
+# Costruzione Output
+OUT="${PADDING_Y}"
+OUT+="${PAD_X}${COLOR}   ◢██████◣   ${RESET}  ${COLOR}◢◤ ${WHITE}${SYSTEM_NAME}${RESET}\n"
+OUT+="${PAD_X}${COLOR}  ██◤    ◥██  ${RESET}  ${GRAY}━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
+OUT+="${PAD_X}${COLOR}  ██       ██  ${RESET}  ${GRAY}Powered by KISS${RESET}\n"
+OUT+="${PAD_X}${COLOR}  ██◣    ◢██  ${RESET}  ${WHITE}MODE   : ${COLOR}${MODE}${RESET}\n"
+OUT+="${PAD_X}${COLOR}   ◥██████◤   ${RESET}  ${WHITE}STATUS : ${GRAY}${STAT}${RESET}\n"
+
+# Output finale sulla TTY1
+echo -ne "$OUT" > /dev/tty1
 sleep "${DELAY}"
 
 # Pulizia finale
