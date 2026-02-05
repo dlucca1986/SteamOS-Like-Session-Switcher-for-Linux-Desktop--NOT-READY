@@ -1,7 +1,15 @@
 #!/bin/bash
 # =============================================================================
-# SteamOS-DIY - SDY Game Wrapper (Agnostic & Clean Edition)
+# SteamMachine-DIY - SDY Game Wrapper
 # =============================================================================
+# Script:      sdy
+# Version:     4.0.0
+# Philosophy:  KISS (Keep It Simple, Stupid)
+# Description: [Descrizione breve e dritta al punto]
+# Repository:  https://github.com/dlucca1986/SteamMachine-DIY
+# License:     MIT
+# =============================================================================
+
 set -eou pipefail
 
 # --- 1. CARICAMENTO GERARCHICO (SSoT) ---
