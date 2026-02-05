@@ -13,50 +13,74 @@
 # License: MIT
 # =============================================================================
 
-set -eou pipefail
+# --- 1. CARICAMENTO AGNOSTICO (SSoT) ---
+# Carichiamo il Master di Sistema (Identità e Path)
+if [ -f "/etc/default/steamos-diy" ]; then
+    source "/etc/default/steamos-diy"
+else
+    # Fallback estremo se il file in /etc non esiste (Agnosticismo)
+    export STEAMOS_USER=$(whoami)
+    export USER_HOME=$HOME
+    export CONF_DIR="${USER_HOME}/.config/steamos-diy"
+    export LOG_FILE="${CONF_DIR}/session.log"
+fi
 
-# --- 1. CARICAMENTO GERARCHICO (SSoT) ---
-source "/usr/share/steamos-diy/defaults" 2>/dev/null || { echo "Defaults missing"; exit 1; }
-source "/etc/default/steamos-diy" 2>/dev/null || { echo "Master Config missing"; exit 1; }
+# Carichiamo il Config Utente (Preferenze e Globali)
+[ -f "${CONF_DIR}/config" ] && source "${CONF_DIR}/config"
 
-# Funzione Log Uniformata
+# Funzione Log (Agnostica e Pulita)
 log() {
-    local level=$1
-    local msg=$2
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SDY] [$level] $msg" >> "${LOG_FILE}" 2>/dev/null || true
-    echo "[$level] $msg" | systemd-cat -t "steamos-diy"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SDY] $1" >> "${LOG_FILE}" 2>/dev/null || true
 }
 
-# Assicuriamoci che la cartella dei giochi esista (GAMES_CONF_DIR definita nel Master)
-mkdir -p "${GAMES_CONF_DIR}"
-
 # --- 2. IDENTIFICAZIONE GIOCO ---
-# Prendiamo l'ultimo argomento (solitamente il percorso dell'eseguibile)
 RAW_PATH="${@: -1}"
+# Risolviamo il path reale (importante per i link simbolici di Steam)
 REAL_PATH=$(readlink -f "$RAW_PATH" 2>/dev/null || echo "$RAW_PATH")
+EXE_NAME=$(basename "${REAL_PATH%.*}")
 
-if [ -d "$REAL_PATH" ]; then
-    FOLDER_NAME=$(basename "$REAL_PATH")
-else
-    FOLDER_NAME=$(basename "$(dirname "$REAL_PATH")")
+# Prepariamo i valori globali (dal file Master Utente)
+FINAL_PRE="${GLOBAL_GAME_PRE_COMMAND:-}"
+FINAL_ARGS="${GLOBAL_GAME_ARGS:-}"
+SPECIFIC_CONF=""
+
+# --- 3. IL BIANCONIGLIO (Ricerca Eccezioni) ---
+# Risaliamo fino a 3 livelli partendo dalla cartella dell'eseguibile
+CURRENT_DIR=$(dirname "$REAL_PATH")
+for i in {1..3}; do
+    DIR_NAME=$(basename "$CURRENT_DIR")
+
+    # Muro di sicurezza: non risaliamo oltre la HOME o cartelle di sistema
+    [[ "$DIR_NAME" =~ ^(common|steamapps|GOG\ Games|Games)$ ]] && break
+    [[ "$CURRENT_DIR" == "$USER_HOME" ]] && break
+
+    # Cerca match con nome cartella o nome eseguibile
+    if [ -f "${GAMES_CONF_DIR}/${DIR_NAME}.conf" ]; then
+        SPECIFIC_CONF="${GAMES_CONF_DIR}/${DIR_NAME}.conf"
+        break
+    elif [ -f "${GAMES_CONF_DIR}/${EXE_NAME}.conf" ]; then
+        SPECIFIC_CONF="${GAMES_CONF_DIR}/${EXE_NAME}.conf"
+        break
+    fi
+    CURRENT_DIR=$(dirname "$CURRENT_DIR")
+done
+
+# --- 4. APPLICAZIONE OVERRIDE (Il famoso 2%) ---
+if [ -n "$SPECIFIC_CONF" ]; then
+    log "Override detected: $(basename "$SPECIFIC_CONF")"
+    source "$SPECIFIC_CONF"
+    # Se il file specifico ha definito variabili locali, vincono sui globali
+    FINAL_PRE="${GAME_PRE_COMMAND:-$FINAL_PRE}"
+    FINAL_ARGS="${GAME_ARGS:-$FINAL_ARGS}"
 fi
 
-GAME_CONF="${GAMES_CONF_DIR}/${FOLDER_NAME}.conf"
-GLOBAL_GAME_CONF="${GAMES_CONF_DIR}/global.conf"
+# --- 5. ESECUZIONE ---
+log "Launching $EXE_NAME (Args: ${FINAL_ARGS:-none})"
 
-# --- 3. GENERAZIONE AUTOMATICA CONFIG (Standardizzata) ---
-[ ! -f "$GLOBAL_GAME_CONF" ] && echo -e "export GAME_PRE_COMMAND=\"\"\nexport GAME_ARGS=\"\"" > "$GLOBAL_GAME_CONF"
+# Ricostruiamo l'array degli argomenti per Steam
+# Rimpiazziamo l'ultimo argomento originale con il path risolto
+set -- "${@:1:$#-1}" "$REAL_PATH"
 
-if [ ! -f "$GAME_CONF" ]; then
-    echo -e "# Config for $FOLDER_NAME\nexport GAME_PRE_COMMAND=\"\"\nexport GAME_ARGS=\"\"" > "$GAME_CONF"
-    log "INFO" "Created new game config: ${FOLDER_NAME}.conf"
-fi
+# Il grande salto: eseguiamo il comando finale
+exec $FINAL_PRE "$@" $FINAL_ARGS
 
-# --- 4. CARICAMENTO ED ESECUZIONE ---
-source "$GLOBAL_GAME_CONF"
-source "$GAME_CONF"
-
-log "LAUNCH" "Executing game: $FOLDER_NAME"
-
-# Esecuzione dinamica
-eval ${GAME_PRE_COMMAND} "$@" ${GAME_ARGS}
