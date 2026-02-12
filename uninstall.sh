@@ -68,7 +68,7 @@ rm -rf /usr/bin/steamos-polkit-helpers/
 info "Cleaning .bash_profile for user $REAL_USER..."
 BP_FILE="$USER_HOME/.bash_profile"
 if [ -f "$BP_FILE" ]; then
-    sed -i '/# --- STEAMOS-DIY TRIGGER ---/,/# ---------------------------/d' "$BP_FILE"
+    sed -i '/# --- BEGIN STEAMOS-DIY TRIGGER ---/,/# --- END STEAMOS-DIY TRIGGER ---/d' "$BP_FILE"
 fi
 
 # --- 6. User Config (Optional) ---
