@@ -104,7 +104,7 @@ deploy_files() {
     # 3.1 Gamescope Capabilities & Hook (Improved string)
     info "Setting Gamescope capabilities and Pacman hook..."
     if [ -f /usr/bin/gamescope ]; then
-        setcap 'cap_sys_admin,cap_sys_nice' /usr/bin/gamescope
+       setcap 'cap_sys_admin,cap_sys_nice,cap_ipc_lock+ep' /usr/bin/gamescope
     fi
     mkdir -p /usr/share/libalpm/hooks/
     [ -f usr/share/libalpm/hooks/gamescope-privs.hook ] && cp usr/share/libalpm/hooks/gamescope-privs.hook /usr/share/libalpm/hooks/
