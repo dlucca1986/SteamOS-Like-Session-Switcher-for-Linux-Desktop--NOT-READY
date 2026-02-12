@@ -2,7 +2,7 @@
 # =============================================================================
 # PROJECT:      SteamMachine-DIY - Master Installer 
 # VERSION:      1.0.0
-# DESCRIPTION:  Installer Tool.
+# DESCRIPTION:  Installer Tool with Multilib support and Atomic Session logic.
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
 # REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
 # LICENSE:      MIT
@@ -43,7 +43,7 @@ check_gpu_and_drivers() {
 
     if echo "$GPU_INFO" | grep -iq "nvidia"; then
         if lsmod | grep -q "nvidia"; then
-            warn "Proprietary Nvidia drivers detected. SKIPPING open-source driver install to avoid conflicts."
+            warn "Proprietary Nvidia drivers detected. SKIPPING open-source driver install."
             SKIP_DRIVERS=true
         else
             info "Nvidia GPU detected (no proprietary drivers). Suggesting Nouveau."
@@ -58,8 +58,15 @@ check_gpu_and_drivers() {
     fi
 }
 
-# --- 2. Dependencies ---
+# --- 2. Dependencies & Repositories ---
 install_dependencies() {
+    # RECUPERATO: Enable multilib (Required for 32-bit gaming libs)
+    if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+        info "Enabling multilib repository..."
+        echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+        pacman -Sy
+    fi
+
     echo -ne "${YELLOW}Highly recommended: Update system (pacman -Syu) first? [y/N] ${NC}"
     read -r confirm_update
     if [[ $confirm_update == [yY] ]]; then
@@ -81,8 +88,11 @@ install_dependencies() {
 deploy_files() {
     info "Deploying system and user files (Overlay)..."
 
-    # System Config
-    [ -f etc/default/steamos-diy ] && cp etc/default/steamos-diy /etc/default/
+    # System Config & SSOTH flattening (Recuperato: Sostituzione USERNAME)
+    if [ -f etc/default/steamos-diy ]; then
+        cp etc/default/steamos-diy /etc/default/
+        sed -i "s/\[USERNAME\]/$REAL_USER/g" /etc/default/steamos-diy
+    fi
 
     # TTY1 Autologin Override
     mkdir -p /etc/systemd/system/getty@tty1.service.d/
@@ -91,10 +101,10 @@ deploy_files() {
         sed -i "s/\[USERNAME\]/$REAL_USER/g" /etc/systemd/system/getty@tty1.service.d/override.conf
     fi
 
-    # 3.1 Gamescope Capabilities & Hook
+    # 3.1 Gamescope Capabilities & Hook (Improved string)
     info "Setting Gamescope capabilities and Pacman hook..."
     if [ -f /usr/bin/gamescope ]; then
-        setcap 'cap_sys_nice=eip' /usr/bin/gamescope
+        setcap 'cap_sys_admin,cap_sys_nice' /usr/bin/gamescope
     fi
     mkdir -p /usr/share/libalpm/hooks/
     [ -f usr/share/libalpm/hooks/gamescope-privs.hook ] && cp usr/share/libalpm/hooks/gamescope-privs.hook /usr/share/libalpm/hooks/
@@ -106,9 +116,10 @@ deploy_files() {
     cp usr/local/bin/steamos-helpers/* /usr/local/bin/steamos-helpers/ 2>/dev/null || true
     chmod +x /usr/local/bin/steamos-* /usr/local/bin/sdy /usr/local/bin/steamos-helpers/*
 
-    # Applications (.desktop)
+    # Applications (.desktop) & Database Refresh
     mkdir -p /usr/local/share/applications/
     cp usr/local/share/applications/*.desktop /usr/local/share/applications/ 2>/dev/null || true
+    update-desktop-database /usr/local/share/applications 2>/dev/null || true
 
     # Skel & Home
     mkdir -p /etc/skel/.config/steamOs
