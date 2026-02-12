@@ -1,24 +1,43 @@
 #!/bin/bash
 # =============================================================================
-# SteamMachine-DIY - System Update Manager
-# =============================================================================
-# Script:      steamos-update
-# Version:     4.0.0
-# Philosophy:  KISS
-# Description: Compatibility shim for SteamOS OTA update infrastructure.
+# PROJECT:      SteamMachine-DIY
+# Version:      1.0.0
+# DESCRIPTION:  Compatibility shim for SteamOS OTA update infrastructure.
+#               Returns Exit Code 7 to simulate an "Up to Date" status.
+# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
+# Repository:   https://github.com/dlucca1986/SteamMachine-DIY
+# PATH:         /usr/local/bin/steamos-helpers/steamos-update
+# LICENSE:      MIT
 # =============================================================================
 
-CONF="/etc/default/steamos-diy"
-[ -f "$CONF" ] && source "$CONF"
+# --- 1. CORE INITIALIZATION ---
+# Load the master configuration to inherit the centralized LOG_FILE path.
+MASTER_CONFIG="/etc/default/steamos-diy"
 
-log_info() {
-    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] [Update-Shim] $1"
+if [ -f "$MASTER_CONFIG" ]; then
+    source "$MASTER_CONFIG"
+else
+    # Fallback log location if master config is missing.
+    LOG_FILE="/tmp/steamos-diy-fallback.log"
+fi
+
+# --- 2. LOGGING HELPER ---
+log_shim() {
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local msg="[$timestamp] [UPDATE-SHIM] $1"
+    
     echo -e "$1"
-    echo "$msg" >> "${LOG_FILE:-/tmp/steamos-diy-fallback.log}"
+    echo "$msg" >> "$LOG_FILE"
 }
 
-log_info "Intercepting SteamOS OTA update request."
-log_info "Update check acknowledged. System is reported as 'Up to Date' to the UI."
+# --- 3. EXECUTION ---
+log_shim "Intercepting SteamOS OTA update request."
 
-# Exit 7 è il codice che SteamOS interpreta come "Nessun aggiornamento necessario"
+# Logic for DIY Hardware:
+# We bypass the official Valve OTA servers to prevent system corruption.
+# Status "Up to Date" is forced to ensure UI stability.
+log_shim "Update check acknowledged. Reporting status: UP TO DATE."
+
+# Exit Code 7 is the specific SteamOS signal for "No updates available".
 exit 7
