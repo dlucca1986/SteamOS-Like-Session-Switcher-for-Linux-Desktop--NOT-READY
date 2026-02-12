@@ -1,0 +1,68 @@
+#!/bin/bash
+# =============================================================================
+# PROJECT:      SSOTH - SDY Wrapper (Discovery Engine)
+# DESCRIPTION:  Standardized Variable Logic (GAME_WRAPPER / GAME_EXTRA_ARGS)
+# =============================================================================
+
+# 1. LOAD CONFIGS: First the master system file, then your user global config.
+MASTER_CONFIG="/etc/default/steamos-diy"
+[ -f "$MASTER_CONFIG" ] && source "$MASTER_CONFIG"
+[ -f "${CONFIG_DIR}/config" ] && source "${CONFIG_DIR}/config"
+
+# 2. IDENTIFICATION: It captures the last argument (the game path) and
+#    extracts the executable name and folder name.
+RAW_PATH="${@: -1}"
+REAL_PATH=$(readlink -f "$RAW_PATH" 2>/dev/null || echo "$RAW_PATH")
+EXE_NAME=$(basename "$REAL_PATH" | cut -d. -f1)
+TEMP_DIR=$(dirname "$REAL_PATH")
+GAME_ID="$EXE_NAME"
+SPECIFIC_CONF=""
+
+# 3. DISCOVERY LOOP: It looks for a .conf file in 3 places:
+#    - Does [ExecutableName].conf exist?
+#    - Does [FolderName].conf exist?
+#    - It climbs up 3 directory levels (to handle bin/x64 subfolders).
+for i in {1..3}; do
+    CURRENT_NAME=$(basename "$TEMP_DIR")
+    [[ "$CURRENT_NAME" =~ ^(common|steamapps|GOG\ Games|Games|home|${CONSOLE_USER}|bin|dist|x64)$ || "$CURRENT_NAME" == "/" || -z "$CURRENT_NAME" ]] && break
+
+    if [ -f "${GAMES_CONF_DIR}/${EXE_NAME}.conf" ]; then
+        if bash -n "${GAMES_CONF_DIR}/${EXE_NAME}.conf" 2>/dev/null; then
+            SPECIFIC_CONF="${GAMES_CONF_DIR}/${EXE_NAME}.conf"
+            GAME_ID="$EXE_NAME"; break
+        fi
+    elif [ -f "${GAMES_CONF_DIR}/${CURRENT_NAME}.conf" ]; then
+        if bash -n "${GAMES_CONF_DIR}/${CURRENT_NAME}.conf" 2>/dev/null; then
+            SPECIFIC_CONF="${GAMES_CONF_DIR}/${CURRENT_NAME}.conf"
+            GAME_ID="$CURRENT_NAME"; break
+        fi
+    fi
+    [[ "$GAME_ID" =~ ^(start|run|launch|launcher|game|engine)$ ]] && GAME_ID="$CURRENT_NAME"
+    TEMP_DIR=$(dirname "$TEMP_DIR")
+done
+
+# 4. FINAL LOGIC & OVERRIDES:
+#    It starts with GLOBAL values from 'config'.
+#    If a SPECIFIC .conf is found, it sources it and overrides only if defined.
+FINAL_PRE="${GAME_WRAPPER}"
+FINAL_ARGS="${GAME_EXTRA_ARGS}"
+
+if [ -n "$SPECIFIC_CONF" ]; then
+    # We save current globals to check if the .conf actually changes them
+    OLD_PRE="$FINAL_PRE"
+    OLD_ARGS="$FINAL_ARGS"
+
+    source "$SPECIFIC_CONF"
+
+    # If the .conf redefined the variables, they take priority.
+    # We use ${VAR:-$DEFAULT} logic to ensure we don't end up with null if sourced.
+    [ "$GAME_WRAPPER" != "$OLD_PRE" ] && FINAL_PRE="$GAME_WRAPPER"
+    [ "$GAME_EXTRA_ARGS" != "$OLD_ARGS" ] && FINAL_ARGS="$GAME_EXTRA_ARGS"
+fi
+
+# 5. EXECUTION: Logs the launch and runs the command.
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SDY] START: $GAME_ID | Conf: $(basename "${SPECIFIC_CONF:-NONE}")" >> "$LOG_FILE"
+set -- "${@:1:$#-1}" "$REAL_PATH"
+
+# Executes: [Wrapper] [Game] [Arguments]
+exec $FINAL_PRE "$@" $FINAL_ARGS

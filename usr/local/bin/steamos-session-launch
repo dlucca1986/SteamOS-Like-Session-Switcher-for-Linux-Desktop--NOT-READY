@@ -1,0 +1,101 @@
+#!/bin/bash
+# =============================================================================
+# PROJECT:      SSOTH - Session Launcher (Streamlined)
+# DESCRIPTION:  Core Session Manager with Dynamic Gamescope Mapping
+# AUTHOR:       Daniele Lucca
+# =============================================================================
+
+# --- 1. CORE INITIALIZATION ---
+# Load the master configuration file to inherit system-wide paths and variables.
+MASTER_CONFIG="/etc/default/steamos-diy"
+source "$MASTER_CONFIG" || { echo "FATAL ERROR: Master config not found at $MASTER_CONFIG"; exit 1; }
+
+# Helper functions for precise logging and timestamping.
+get_timestamp() { date "+%Y-%m-%d %H:%M:%S.%3N"; }
+log_info() { echo "[$(get_timestamp)] [LAUNCHER] $1" >> "${LOG_FILE}"; }
+
+log_info "--- SYSTEM STARTUP ---"
+
+# --- 2. MAIN EXECUTION LOOP ---
+# This loop handles the transition between Steam (Game Mode) and Desktop Mode.
+while true; do
+    # Determine the next target session; defaults to 'steam' if the file is missing.
+    TARGET_SESSION=$(cat "${NEXT_SESSION_FILE}" 2>/dev/null || echo "steam")
+    ssoth_banner "$TARGET_SESSION" "INITIALIZING..."
+    sleep 1.2
+
+    case "${TARGET_SESSION}" in
+        "steam")
+            log_info "Launching Steam Session..."
+
+            # --- CLEANUP & RESET ---
+            # Ensure no residual flags remain from previous sessions.
+            unset GS_DYNAMIC_FLAGS
+            GS_DYNAMIC_FLAGS=""
+
+            # --- 1. DYNAMIC FLAG CONSTRUCTION ---
+            # Automatically maps variables starting with GS_ to Gamescope arguments.
+            if [ -f "${CONFIG_DIR}/config" ] && bash -n "${CONFIG_DIR}/config" 2>/dev/null; then
+                source "${CONFIG_DIR}/config"
+
+                while read -r line; do
+                    # Ignore comments and empty lines.
+                    [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+
+                    var_name=$(echo "$line" | cut -d'=' -f1)
+                    var_val="${!var_name}"
+
+                    # Transformation logic: GS_WINE_FULLSCREEN=1 becomes --wine-fullscreen
+                    if [[ "$var_name" == GS_* ]]; then
+                        flag=$(echo "${var_name#GS_}" | tr '_' '-')
+
+                        if [ "$var_val" = "1" ]; then
+                            GS_DYNAMIC_FLAGS="${GS_DYNAMIC_FLAGS} --${flag}"
+                        elif [ "$var_val" != "0" ] && [ -n "$var_val" ]; then
+                            GS_DYNAMIC_FLAGS="${GS_DYNAMIC_FLAGS} --${flag} ${var_val}"
+                        fi
+                    fi
+                done < <(grep '^GS_' "${CONFIG_DIR}/config")
+            else
+                log_info "WARN: User config error or missing. Falling back to defaults."
+            fi
+
+            # --- 2. COMMAND ASSEMBLY & EXECUTION ---
+            # Forced flags: -e (Steam integration) and -f (Fullscreen) for the main session.
+            LAUNCH_CMD="gamescope -e -f ${GS_DYNAMIC_FLAGS} -- steam -gamepadui -steamos3"
+
+            log_info "Executing: $LAUNCH_CMD"
+            START_TIME=$(date +%s)
+            eval "${LAUNCH_CMD}" >> "${LOG_FILE}" 2>&1
+
+            # --- 3. EXIT & CRASH HANDLING ---
+            # Detects if the session crashed (duration < 5s) and sets next session to Desktop.
+            DURATION=$(($(date +%s) - START_TIME))
+            NEXT="desktop"
+            [[ $DURATION -lt 5 ]] && log_info "CRASH DETECTED: Session ended prematurely."
+
+            # Atomic file update to prevent corruption during unexpected shutdowns.
+            echo "$NEXT" > "${NEXT_SESSION_FILE}.tmp" && mv "${NEXT_SESSION_FILE}.tmp" "${NEXT_SESSION_FILE}"
+            ;;
+
+        "plasma"|"desktop")
+            log_info "Launching Desktop Environment (Plasma)..."
+            [ -f "${CONFIG_DIR}/config" ] && source "${CONFIG_DIR}/config"
+
+            # Start Wayland session with custom environment variables.
+            env ${PLASMA_ENV} /usr/bin/startplasma-wayland >> "${LOG_FILE}" 2>&1
+
+            # Atomic switch back to Steam session for the next reboot/restart.
+            echo "steam" > "${NEXT_SESSION_FILE}.tmp" && mv "${NEXT_SESSION_FILE}.tmp" "${NEXT_SESSION_FILE}"
+            ;;
+
+        *)
+            # Fallback for undefined session types.
+            log_info "Unknown session type: ${TARGET_SESSION}. Resetting to steam."
+            echo "steam" > "${NEXT_SESSION_FILE}.tmp" && mv "${NEXT_SESSION_FILE}.tmp" "${NEXT_SESSION_FILE}"
+            ;;
+    esac
+
+    # Throttle the loop to prevent high CPU usage.
+    sleep "${CHECK_INTERVAL:-0.5}"
+done
