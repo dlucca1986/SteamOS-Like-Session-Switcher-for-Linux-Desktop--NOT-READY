@@ -1,24 +1,40 @@
 #!/bin/bash
 # =============================================================================
-# SteamMachine-DIY - Release Channel Manager
-# =============================================================================
-# Script:      steamos-select-branch
-# Version:     4.0.0
-# Philosophy:  KISS
-# Description: Compatibility shim for SteamOS update channels.
+# PROJECT:      SSOTH - Release Channel Manager
+# DESCRIPTION:  Compatibility shim for SteamOS update channels.
+#               Simulates branch switching to satisfy Steam Client requirements.
+# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
+# PATH:         /usr/local/bin/steamos-select-branch
+# LICENSE:      MIT
 # =============================================================================
 
-CONF="/etc/default/steamos-diy"
-[ -f "$CONF" ] && source "$CONF"
+# --- 1. CORE INITIALIZATION ---
+# Load the master configuration to inherit the centralized LOG_FILE path.
+MASTER_CONFIG="/etc/default/steamos-diy"
 
-log_info() {
-    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] [Branch-Shim] $1"
+if [ -f "$MASTER_CONFIG" ]; then
+    source "$MASTER_CONFIG"
+else
+    # Fallback log location if master config is missing.
+    LOG_FILE="/tmp/steamos-diy-fallback.log"
+fi
+
+# --- 2. LOGGING HELPER ---
+log_shim() {
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local msg="[$timestamp] [BRANCH-SHIM] $1"
+    
     echo -e "$1"
-    echo "$msg" >> "${LOG_FILE:-/tmp/steamos-diy-fallback.log}"
+    echo "$msg" >> "$LOG_FILE"
 }
 
+# --- 3. EXECUTION ---
+# Capture the branch name passed as the first argument (default to 'stable').
 SELECTED_BRANCH=${1:-"stable"}
-log_info "Intercepting branch switch request: ${SELECTED_BRANCH}"
-log_info "Release channel '${SELECTED_BRANCH}' confirmed (Simulated)."
 
+log_shim "Intercepting branch switch request to: ${SELECTED_BRANCH}"
+log_shim "Release channel '${SELECTED_BRANCH}' confirmed (Simulated for DIY hardware)."
+
+# Exit with success (0) to tell Steam that the branch switch was 'completed'.
 exit 0
