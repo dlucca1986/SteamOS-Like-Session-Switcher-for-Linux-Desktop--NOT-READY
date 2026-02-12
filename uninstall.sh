@@ -108,15 +108,14 @@ restore_display_manager
 info "Reloading system daemons..."
 systemctl daemon-reload
 
-# Definiamo la lista esatta per trasparenza (deve corrispondere a quella dell'installer)
-REMAINING_PKGS="steam gamescope xorg-xwayland mangohud gamemode vulkan-icd-loader mesa-utils python-pyqt6 pciutils procps-ng"
+REMAINING_PKGS="steam gamescope xorg-xwayland mangohud lib32-mangohud gamemode lib32-gamemode vulkan-icd-loader lib32-vulkan-icd-loader mesa-utils python-pyqt6 pciutils procps-ng"
 
 echo -e "\n${GREEN}==================================================${NC}"
 success "UNINSTALLATION COMPLETE!"
 echo -e "${GREEN}==================================================${NC}"
 info "System restored to standard behavior."
-echo -e "\n${YELLOW}NOTE: The following packages were NOT removed:${NC}"
+echo -e "\n${YELLOW}NOTE: The following packages were NOT removed to preserve your data/drivers:${NC}"
 echo -e "      $REMAINING_PKGS"
-echo -e "\nIf you want to remove them, run:"
+echo -e "\nIf you wish to remove them and their unused dependencies, run:"
 echo -e "sudo pacman -Rs $REMAINING_PKGS"
 echo -e "${GREEN}==================================================${NC}\n"
