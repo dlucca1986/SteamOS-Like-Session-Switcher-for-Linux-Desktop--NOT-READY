@@ -1,1 +1,94 @@
 
+# =============================================================================
+# PROJECT:      SteamMachine-DIY - Complete Dynamic Configuration
+# Version:      1.0.0
+# DESCRIPTION:  Full Gamescope parameters mapping.
+# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
+# REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
+# RULE:         GS_variable=1 (on) / 0 (off) or "value".
+#               Underscores (_) are converted to hyphens (-) by the launcher.
+# PATH:         $HOME/.config/steamOs/config
+# LICENSE:      MIT
+# =============================================================================
+
+# --- 1. SYSTEM & ENVIRONMENT ---
+export CHECK_INTERVAL=1
+
+# --- 2. GLOBAL GAME DEFAULTS (SDY) ---
+export GAME_WRAPPER=""
+export GAME_EXTRA_ARGS=""
+
+# --- 3. OUTPUT & NESTED RESOLUTION ---
+GS_output_width=""               # -W       | Output width
+GS_output_height=""              # -H       | Output height
+GS_nested_width=""               # -w       | Game width
+GS_nested_height=""              # -h       | Game height
+GS_nested_refresh=""             # -r       | Refresh rate (FPS)
+GS_nested_unfocused_refresh=""   # -o       | Unfocused refresh rate
+GS_max_scale=""                  # -m       | Maximum scale factor
+GS_scaler=""                     # -S       | upscaler (auto, integer, fit, fill, stretch)
+GS_filter=""                     # -F       | filter (linear, nearest, fsr, nis, pixel)
+                                 #            fsr => AMD FidelityFX™ Super Res 1.0
+                                 #            nis => NVIDIA Image Scaling v1.0.3
+GS_sharpness="                   #          | --sharpness (0 max to 20 min)
+
+# --- 4. CORE FEATURES (1=On, 0=Off) ---
+GS_rt=0                          # --rt     | Realtime scheduling
+GS_mangoapp=0                    # --mango  | MangoHud performance overlay
+GS_adaptive_sync=0               # --sync   | Adaptive sync (VRR)
+GS_immediate_flips=0             # --flips  | Enable tearing (lower latency)
+GS_keep_alive=0                  # --keep   | Keep alive if process dies
+GS_expose_wayland=0              # --wayl   | Support wayland clients
+GS_allow_deferred_backend=0      # --defer  | Deferred backend init
+GS_xwayland_count=0              # --xway   | Number of xwayland servers
+GS_stats_path=""                 # -T       | Write statistics to path
+
+# --- 5. INPUT & CURSOR ---
+#GS_mouse_sensitivity="1.0"      # -s       | Mouse sensitivity decimal
+#GS_hide_cursor_delay=""         # -C       | Hide cursor after N ms
+#GS_cursor=""                    # --cursor | Path to cursor image
+#GS_cursor_scale_height=""       # --cscale | Scale cursor against height
+#GS_grab=0                       # -g       | Grab keyboard
+#GS_force_grab_cursor=0          # --fgrab  | Always use relative mouse
+#GS_ready_fd=""                  # -R       | Notify FD when ready
+
+# --- 6. DISPLAY & ORIENTATION ---
+#GS_borderless=0                 # -b       | Borderless window
+#GS_force_orientation="normal"   # --orient | normal, left, right, upsidedown
+#GS_force_windows_fullscreen=0   # --fullscreen
+#GS_display_index=""             # --idx    | Force specific display index
+#GS_prefer_output=""             # -O       | Priority (e.g. DP-1,HDMI-A-1)
+#GS_prefer_vk_device=""          # --vk     | (e.g. 1002:7300)
+#GS_default_touch_mode=""        # --touch  | 0:hover, 1:L, 2:R, 3:M, 4:pass
+#GS_generate_drm_mode=""         # --drm    | cvt, fixed
+#GS_virtual_connector_strategy=""# --virt   | Strategy
+
+# --- 7. HDR & COLOR MANAGEMENT ---
+#GS_hdr_enabled=0                # --hdr    | Enable HDR output
+#GS_sdr_gamut_wideness=0         # --gamut  | SDR wideness 0-1
+#GS_hdr_sdr_content_nits=400     # --nits   | SDR content luminance
+#GS_hdr_itm_enabled=0            # --itm    | SDR->HDR inverse tone mapping
+#GS_hdr_itm_sdr_nits=100         # --itmsdr | Default: 100
+#GS_hdr_itm_target_nits=1000     # --itmtgt | Default: 1000
+#GS_framerate_limit=0            # --limit  | Simple FPS limit
+
+# --- 8. VR MODE OPTIONS ---
+#GS_vr_overlay_key=""            # SteamVR overlay key
+#GS_vr_app_overlay_key=""        # SteamVR child app key
+#GS_vr_overlay_show_immediately=0# Focus immediately
+#GS_vr_scrolls_speed="8.0"       # Default: 8.0
+
+# --- 9. DEBUG & ADVANCED ---
+#GS_disable_layers=0             # --no-lay | Disable hardware planes
+#GS_debug_layers=0               # --db-lay | Debug libliftoff
+#GS_debug_focus=0                # --db-foc | Debug XWM focus
+#GS_synchronous_x11=0            # --sync-x | Force X11 sync
+#GS_debug_hud=0                  # --db-hud | Paint HUD debug info
+#GS_force_composition=0          # --comp   | Disable direct scan-out
+#GS_disable_color_management=0   # --no-col | Disable color management
+
+# --- 10. SHADERS & BACKEND ---
+#GS_reshade_effect=""            # --resh   | Reshade shader name
+#GS_backend="auto"               # --back   | auto, drm, sdl, wayland, headless
+
+# --- END OF CONFIG ---
