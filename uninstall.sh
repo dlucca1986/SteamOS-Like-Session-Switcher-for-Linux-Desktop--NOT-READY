@@ -85,11 +85,26 @@ if [ -f /usr/bin/gamescope ]; then
     setcap -r /usr/bin/gamescope 2>/dev/null || true
 fi
 
-# --- 8. Finalization ---
+# --- 8. Restore Display Manager ---
+
+restore_display_manager() {
+    warn "SteamMachine-DIY is removed. You might want to re-enable a Display Manager."
+    for dm in sddm gdm lightdm lxdm; do
+        if pacman -Qs "$dm" > /dev/null; then
+            echo -ne "${CYAN}Detected $dm. Re-enable it? [y/N] ${NC}"
+            read -r reconfirm
+            if [[ $reconfirm == [yY] ]]; then
+                systemctl enable "$dm"
+                success "$dm enabled."
+                break
+            fi
+        fi
+    done
+}
+
+# --- 9. Finalization ---
 info "Reloading system daemons..."
 systemctl daemon-reload
-# NOTA: Non disabilitiamo getty@tty1.service perché è essenziale per il login, 
-# ma avendo rimosso l'override, tornerà al comportamento standard.
 
 echo -e "\n${GREEN}==================================================${NC}"
 success "UNINSTALLATION COMPLETE!"
