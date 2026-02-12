@@ -1,8 +1,12 @@
 # =============================================================================
-# PROJECT:      SSOTH (Single Source of Truth) - SteamOS-DIY
+# PROJECT:      SteamOS-DIY - SSOTH (Single Source of Truth)
+# Version:      1.0.0
 # DESCRIPTION:  Centralized System Identity and Global Paths.
+# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
+# REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
 #               This file is populated by the installer.
-# Path: /etc/default/steamos-diy
+# PATH:         /etc/default/steamos-diy
+# LICENSE:      MIT
 # =============================================================================
 
 # --- 1. SYSTEM IDENTITY ---
