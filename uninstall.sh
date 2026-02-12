@@ -47,6 +47,8 @@ rm -f /usr/share/libalpm/hooks/gamescope-privs.hook
 info "Removing binaries and helpers..."
 rm -f /usr/local/bin/steamos-*
 rm -f /usr/local/bin/sdy
+rm -f /usr/local/bin/restore_system
+rm -f /usr/local/bin/backup_system
 rm -rf /usr/local/bin/steamos-helpers/
 
 # --- 3. Remove Desktop Entries ---
