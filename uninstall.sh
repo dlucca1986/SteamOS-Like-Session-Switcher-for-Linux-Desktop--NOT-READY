@@ -45,11 +45,11 @@ rm -f /usr/share/libalpm/hooks/gamescope-privs.hook
 
 # --- 2. Remove Binaries & Helpers ---
 info "Removing binaries and helpers..."
+rm -rf /usr/local/bin/steamos-helpers/
 rm -f /usr/local/bin/steamos-*
 rm -f /usr/local/bin/sdy
 rm -f /usr/local/bin/restore_system
 rm -f /usr/local/bin/backup_system
-rm -rf /usr/local/bin/steamos-helpers/
 
 # --- 3. Remove Desktop Entries ---
 info "Removing desktop applications..."
