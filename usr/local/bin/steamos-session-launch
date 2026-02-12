@@ -1,26 +1,37 @@
 #!/bin/bash
 # =============================================================================
-# PROJECT:      SSOTH - Session Launcher (Streamlined)
-# DESCRIPTION:  Core Session Manager with Dynamic Gamescope Mapping
+# PROJECT:      SteamMachine-DIY - Session Launcher
+# Version:      1.0.0
+# DESCRIPTION:  Core Session Manager with Dynamic Gamescope Mapping.
+#               Handles seamless transitions between Steam and Desktop.
 # AUTHOR:       Daniele Lucca
+# PHILOSOPHY:   KISS & Atomic Reliability
+# REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
+# PATH:         /usr/local/bin/steamos-session-launch
 # =============================================================================
 
 # --- 1. CORE INITIALIZATION ---
-# Load the master configuration file to inherit system-wide paths and variables.
 MASTER_CONFIG="/etc/default/steamos-diy"
-source "$MASTER_CONFIG" || { echo "FATAL ERROR: Master config not found at $MASTER_CONFIG"; exit 1; }
 
-# Helper functions for precise logging and timestamping.
+if [ -f "$MASTER_CONFIG" ]; then
+    source "$MASTER_CONFIG"
+else
+    echo "FATAL ERROR: Master config not found at $MASTER_CONFIG"
+    exit 1
+fi
+
+# Helper functions for precise logging.
 get_timestamp() { date "+%Y-%m-%d %H:%M:%S.%3N"; }
 log_info() { echo "[$(get_timestamp)] [LAUNCHER] $1" >> "${LOG_FILE}"; }
 
 log_info "--- SYSTEM STARTUP ---"
 
 # --- 2. MAIN EXECUTION LOOP ---
-# This loop handles the transition between Steam (Game Mode) and Desktop Mode.
 while true; do
-    # Determine the next target session; defaults to 'steam' if the file is missing.
+    # Determine target session; defaults to 'steam' if missing.
     TARGET_SESSION=$(cat "${NEXT_SESSION_FILE}" 2>/dev/null || echo "steam")
+    
+    # Show the visual feedback on TTY1
     ssoth_banner "$TARGET_SESSION" "INITIALIZING..."
     sleep 1.2
 
@@ -28,8 +39,7 @@ while true; do
         "steam")
             log_info "Launching Steam Session..."
 
-            # --- CLEANUP & RESET ---
-            # Ensure no residual flags remain from previous sessions.
+            # Reset dynamic flags
             unset GS_DYNAMIC_FLAGS
             GS_DYNAMIC_FLAGS=""
 
@@ -39,15 +49,14 @@ while true; do
                 source "${CONFIG_DIR}/config"
 
                 while read -r line; do
-                    # Ignore comments and empty lines.
                     [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
 
                     var_name=$(echo "$line" | cut -d'=' -f1)
                     var_val="${!var_name}"
 
-                    # Transformation logic: GS_WINE_FULLSCREEN=1 becomes --wine-fullscreen
+                    # Transformation: GS_WINE_FULLSCREEN=1 -> --wine-fullscreen
                     if [[ "$var_name" == GS_* ]]; then
-                        flag=$(echo "${var_name#GS_}" | tr '_' '-')
+                        flag=$(echo "${var_name#GS_}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
 
                         if [ "$var_val" = "1" ]; then
                             GS_DYNAMIC_FLAGS="${GS_DYNAMIC_FLAGS} --${flag}"
@@ -57,11 +66,11 @@ while true; do
                     fi
                 done < <(grep '^GS_' "${CONFIG_DIR}/config")
             else
-                log_info "WARN: User config error or missing. Falling back to defaults."
+                log_info "WARN: User config error or missing. Using defaults."
             fi
 
             # --- 2. COMMAND ASSEMBLY & EXECUTION ---
-            # Forced flags: -e (Steam integration) and -f (Fullscreen) for the main session.
+            # -e: Steam integration, -f: Fullscreen.
             LAUNCH_CMD="gamescope -e -f ${GS_DYNAMIC_FLAGS} -- steam -gamepadui -steamos3"
 
             log_info "Executing: $LAUNCH_CMD"
@@ -69,12 +78,16 @@ while true; do
             eval "${LAUNCH_CMD}" >> "${LOG_FILE}" 2>&1
 
             # --- 3. EXIT & CRASH HANDLING ---
-            # Detects if the session crashed (duration < 5s) and sets next session to Desktop.
             DURATION=$(($(date +%s) - START_TIME))
-            NEXT="desktop"
-            [[ $DURATION -lt 5 ]] && log_info "CRASH DETECTED: Session ended prematurely."
+            NEXT="desktop" # Default behavior after Steam exit is going to Desktop
+            
+            if [ $DURATION -lt 5 ]; then
+                log_info "CRASH DETECTED: Steam ended too quickly ($DURATION s)."
+                ssoth_banner "CRASH" "RECOVERING..."
+                sleep 2
+            fi
 
-            # Atomic file update to prevent corruption during unexpected shutdowns.
+            # Atomic update of the next session file
             echo "$NEXT" > "${NEXT_SESSION_FILE}.tmp" && mv "${NEXT_SESSION_FILE}.tmp" "${NEXT_SESSION_FILE}"
             ;;
 
@@ -82,20 +95,19 @@ while true; do
             log_info "Launching Desktop Environment (Plasma)..."
             [ -f "${CONFIG_DIR}/config" ] && source "${CONFIG_DIR}/config"
 
-            # Start Wayland session with custom environment variables.
+            # Start Wayland session with SSOTH environment variables.
             env ${PLASMA_ENV} /usr/bin/startplasma-wayland >> "${LOG_FILE}" 2>&1
 
-            # Atomic switch back to Steam session for the next reboot/restart.
+            # Atomic switch back to Steam for next boot.
             echo "steam" > "${NEXT_SESSION_FILE}.tmp" && mv "${NEXT_SESSION_FILE}.tmp" "${NEXT_SESSION_FILE}"
             ;;
 
         *)
-            # Fallback for undefined session types.
-            log_info "Unknown session type: ${TARGET_SESSION}. Resetting to steam."
+            log_info "Unknown session: ${TARGET_SESSION}. Resetting to steam."
             echo "steam" > "${NEXT_SESSION_FILE}.tmp" && mv "${NEXT_SESSION_FILE}.tmp" "${NEXT_SESSION_FILE}"
             ;;
     esac
 
-    # Throttle the loop to prevent high CPU usage.
+    # Prevent CPU hammering
     sleep "${CHECK_INTERVAL:-0.5}"
 done
