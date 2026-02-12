@@ -1,16 +1,31 @@
 #!/bin/bash
 # =============================================================================
-# PROJECT:      SSOTH - SDY Wrapper (Discovery Engine)
+# PROJECT:      SteamMachine-DIY - SDY Wrapper (Discovery Engine)
+# Version:      1.0.0
 # DESCRIPTION:  Standardized Variable Logic (GAME_WRAPPER / GAME_EXTRA_ARGS)
+#               Climbs directory levels to find specific game overrides.
+# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
+# Repository:   https://github.com/dlucca1986/SteamMachine-DIY
+# PATH:         /usr/local/bin/sdy
+# LICENSE:      MIT
 # =============================================================================
 
-# 1. LOAD CONFIGS: First the master system file, then your user global config.
+# 1. LOAD CONFIGS: Load master system identity, then global user config.
 MASTER_CONFIG="/etc/default/steamos-diy"
-[ -f "$MASTER_CONFIG" ] && source "$MASTER_CONFIG"
+if [ -f "$MASTER_CONFIG" ]; then
+    source "$MASTER_CONFIG"
+else
+    echo "[ERROR] SSOTH Master config missing at /etc/default/steamos-diy"
+    exit 1
+fi
+
+# Ensure LOG_FILE exists to avoid write errors
+[ -f "$LOG_FILE" ] || touch "$LOG_FILE" 2>/dev/null
+
+# Load Global Overrides (e.g., default gamemoderun)
 [ -f "${CONFIG_DIR}/config" ] && source "${CONFIG_DIR}/config"
 
-# 2. IDENTIFICATION: It captures the last argument (the game path) and
-#    extracts the executable name and folder name.
+# 2. IDENTIFICATION: Extract executable name and path.
 RAW_PATH="${@: -1}"
 REAL_PATH=$(readlink -f "$RAW_PATH" 2>/dev/null || echo "$RAW_PATH")
 EXE_NAME=$(basename "$REAL_PATH" | cut -d. -f1)
@@ -18,12 +33,12 @@ TEMP_DIR=$(dirname "$REAL_PATH")
 GAME_ID="$EXE_NAME"
 SPECIFIC_CONF=""
 
-# 3. DISCOVERY LOOP: It looks for a .conf file in 3 places:
-#    - Does [ExecutableName].conf exist?
-#    - Does [FolderName].conf exist?
-#    - It climbs up 3 directory levels (to handle bin/x64 subfolders).
+# 3. DISCOVERY LOOP: Climb up to 3 directory levels to find a .conf file.
+#    Checks for [ExecutableName].conf or [FolderName].conf
 for i in {1..3}; do
     CURRENT_NAME=$(basename "$TEMP_DIR")
+    
+    # Stop climbing if we hit system or generic folders
     [[ "$CURRENT_NAME" =~ ^(common|steamapps|GOG\ Games|Games|home|${CONSOLE_USER}|bin|dist|x64)$ || "$CURRENT_NAME" == "/" || -z "$CURRENT_NAME" ]] && break
 
     if [ -f "${GAMES_CONF_DIR}/${EXE_NAME}.conf" ]; then
@@ -37,32 +52,33 @@ for i in {1..3}; do
             GAME_ID="$CURRENT_NAME"; break
         fi
     fi
+    
+    # If the executable has a generic name (e.g. 'start'), use the folder name as ID
     [[ "$GAME_ID" =~ ^(start|run|launch|launcher|game|engine)$ ]] && GAME_ID="$CURRENT_NAME"
     TEMP_DIR=$(dirname "$TEMP_DIR")
 done
 
 # 4. FINAL LOGIC & OVERRIDES:
-#    It starts with GLOBAL values from 'config'.
-#    If a SPECIFIC .conf is found, it sources it and overrides only if defined.
+#    Start with GLOBAL values, then apply SPECIFIC overrides if found.
 FINAL_PRE="${GAME_WRAPPER}"
 FINAL_ARGS="${GAME_EXTRA_ARGS}"
 
 if [ -n "$SPECIFIC_CONF" ]; then
-    # We save current globals to check if the .conf actually changes them
+    # Save current globals to detect changes after sourcing
     OLD_PRE="$FINAL_PRE"
     OLD_ARGS="$FINAL_ARGS"
 
     source "$SPECIFIC_CONF"
 
-    # If the .conf redefined the variables, they take priority.
-    # We use ${VAR:-$DEFAULT} logic to ensure we don't end up with null if sourced.
     [ "$GAME_WRAPPER" != "$OLD_PRE" ] && FINAL_PRE="$GAME_WRAPPER"
     [ "$GAME_EXTRA_ARGS" != "$OLD_ARGS" ] && FINAL_ARGS="$GAME_EXTRA_ARGS"
 fi
 
-# 5. EXECUTION: Logs the launch and runs the command.
+# 5. EXECUTION: Log the event and launch the game.
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SDY] START: $GAME_ID | Conf: $(basename "${SPECIFIC_CONF:-NONE}")" >> "$LOG_FILE"
+
+# Rebuild arguments list: all arguments except the last one, then the cleaned REAL_PATH
 set -- "${@:1:$#-1}" "$REAL_PATH"
 
-# Executes: [Wrapper] [Game] [Arguments]
+# Executes: [Wrapper] [Game] [Arguments] [ExtraArgs]
 exec $FINAL_PRE "$@" $FINAL_ARGS
