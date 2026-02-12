@@ -5,7 +5,7 @@
 # DESCRIPTION:  Standardized Variable Logic (GAME_WRAPPER / GAME_EXTRA_ARGS)
 #               Climbs directory levels to find specific game overrides.
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
-# Repository:   https://github.com/dlucca1986/SteamMachine-DIY
+# REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
 # PATH:         /usr/local/bin/sdy
 # LICENSE:      MIT
 # =============================================================================
