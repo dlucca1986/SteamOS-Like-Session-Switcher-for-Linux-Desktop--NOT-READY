@@ -12,7 +12,7 @@
 # =============================================================================
 
 # --- 1. SYSTEM & ENVIRONMENT ---
-export CHECK_INTERVAL=1
+export CHECK_INTERVAL=0.5
 
 # --- 2. GLOBAL GAME DEFAULTS (SDY) ---
 export GAME_WRAPPER=""
