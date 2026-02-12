@@ -96,4 +96,4 @@ GS_backend="auto"                # --backend (auto, drm, sdl, wayland)
 # ------------------------------------------------------------------------------
 gamescope -e -f --output-width 1366 --output-height 768 --scaler fit --filter linear --sharpness 2 --rt --adaptive-sync --immediate-flips --xwayland-count 2 --backend auto -- steam
 
-# --- END OF CONFIG ---
+# --- END OF EXAMPLES ---
