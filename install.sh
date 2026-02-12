@@ -60,7 +60,6 @@ check_gpu_and_drivers() {
 
 # --- 2. Dependencies & Repositories ---
 install_dependencies() {
-    # RECUPERATO: Enable multilib (Required for 32-bit gaming libs)
     if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
         info "Enabling multilib repository..."
         echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
@@ -101,7 +100,7 @@ deploy_files() {
         sed -i "s/\[USERNAME\]/$REAL_USER/g" /etc/systemd/system/getty@tty1.service.d/override.conf
     fi
 
-    # 3.1 Gamescope Capabilities & Hook (Improved string)
+    # 3.1 Gamescope Capabilities & Hook
     info "Setting Gamescope capabilities and Pacman hook..."
     if [ -f /usr/bin/gamescope ]; then
        setcap 'cap_sys_admin,cap_sys_nice,cap_ipc_lock+ep' /usr/bin/gamescope
