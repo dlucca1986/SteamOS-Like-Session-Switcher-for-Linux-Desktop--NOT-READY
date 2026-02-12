@@ -52,7 +52,7 @@ ssoth_banner() {
     # ASCII Logo and Session Info
     printf "${C}    ◢██████◣   ${C}◢◤ ${WHITE}SteamOs-Diy${R}\n"
     printf "${C}  ██◤      ◥██  ${G}━━━━━━━━━━━━━━━━━━━━━━━${R}\n"
-    printf "${C}  ██         ██  ${G}Powered by KISS${R}\n"
+    printf "${C}  ██          ██  ${G}Powered by KISS${R}\n"
     printf "${C}  ██◣      ◢██  ${WHITE}USER   : ${G}%s${R}\n" "${CONSOLE_USER}"
     printf "${C}    ◥██████◤   ${WHITE}MODE   : ${C}%-10s${R}\n" "${MODE^^}"
     printf "               ${WHITE}STATUS : ${G}%s${R}\n" "${STATUS_MSG^^}"
