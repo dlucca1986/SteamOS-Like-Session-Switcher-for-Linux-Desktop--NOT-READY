@@ -1,0 +1,172 @@
+#!/bin/bash
+# =============================================================================
+# SteamMachine-DIY - Master Installer (v4.0.0)
+# Philosophy: Open-Source, Zero-Sudoers, Atomic Session Switching
+# =============================================================================
+
+set -e # Exit on error
+
+# --- Colors & UI ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+info() { echo -e "${CYAN}[INFO]${NC} $1"; }
+success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# --- Identity Detection ---
+if [ "$EUID" -ne 0 ]; then
+    error "Please run as root (sudo ./install.sh)"
+    exit 1
+fi
+
+REAL_USER=${SUDO_USER:-$(whoami)}
+USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
+info "Starting installation for user: $REAL_USER"
+info "Home directory: $USER_HOME"
+
+# --- 1. Hardware & Driver Audit ---
+check_gpu_and_drivers() {
+    info "Auditing Hardware and Drivers..."
+    GPU_INFO=$(lspci | grep -i vga)
+    SKIP_DRIVERS=false
+    DRIVER_PKGS=""
+
+    if echo "$GPU_INFO" | grep -iq "nvidia"; then
+        if lsmod | grep -q "nvidia"; then
+            warn "Proprietary Nvidia drivers detected. SKIPPING open-source driver install to avoid conflicts."
+            SKIP_DRIVERS=true
+        else
+            info "Nvidia GPU detected (no proprietary drivers). Suggesting Nouveau."
+            DRIVER_PKGS="vulkan-nouveau lib32-vulkan-nouveau"
+        fi
+    elif echo "$GPU_INFO" | grep -iq "amd"; then
+        info "AMD GPU detected. Suggesting vulkan-radeon."
+        DRIVER_PKGS="vulkan-radeon lib32-vulkan-radeon"
+    elif echo "$GPU_INFO" | grep -iq "intel"; then
+        info "Intel GPU detected. Suggesting vulkan-intel."
+        DRIVER_PKGS="vulkan-intel lib32-vulkan-intel"
+    fi
+}
+
+# --- 2. Dependencies ---
+install_dependencies() {
+    echo -ne "${YELLOW}Highly recommended: Update system (pacman -Syu) first? [y/N] ${NC}"
+    read -r confirm_update
+    if [[ $confirm_update == [yY] ]]; then
+        pacman -Syu --noconfirm
+    fi
+
+    BASE_PKGS="steam gamescope xorg-xwayland mangohud lib32-mangohud gamemode lib32-gamemode vulkan-icd-loader lib32-vulkan-icd-loader mesa-utils python-pyqt6 pciutils procps-ng"
+    
+    info "Installing core dependencies..."
+    pacman -S --needed --noconfirm $BASE_PKGS
+
+    if [[ "$SKIP_DRIVERS" == "false" && -n "$DRIVER_PKGS" ]]; then
+        info "Installing open-source drivers: $DRIVER_PKGS"
+        pacman -S --needed --noconfirm $DRIVER_PKGS
+    fi
+}
+
+# --- 3. File Deployment (Overlay) ---
+deploy_files() {
+    info "Deploying system and user files (Overlay)..."
+
+    # System Config
+    [ -f etc/default/steamos-diy ] && cp etc/default/steamos-diy /etc/default/
+
+    # TTY1 Autologin Override
+    mkdir -p /etc/systemd/system/getty@tty1.service.d/
+    if [ -f etc/systemd/system/getty@tty1.service.d/override.conf ]; then
+        cp etc/systemd/system/getty@tty1.service.d/override.conf /etc/systemd/system/getty@tty1.service.d/
+        sed -i "s/\[USERNAME\]/$REAL_USER/g" /etc/systemd/system/getty@tty1.service.d/override.conf
+    fi
+
+    # Binaries
+    mkdir -p /usr/local/bin/steamos-helpers
+    cp usr/local/bin/steamos-* /usr/local/bin/ 2>/dev/null || true
+    cp usr/local/bin/sdy /usr/local/bin/ 2>/dev/null || true
+    cp usr/local/bin/steamos-helpers/* /usr/local/bin/steamos-helpers/ 2>/dev/null || true
+    chmod +x /usr/local/bin/steamos-* /usr/local/bin/sdy /usr/local/bin/steamos-helpers/*
+
+    # Applications (.desktop)
+    mkdir -p /usr/local/share/applications/
+    cp usr/local/share/applications/*.desktop /usr/local/share/applications/ 2>/dev/null || true
+
+    # Skel & Home
+    mkdir -p /etc/skel/.config/steamOs
+    [ -f etc/skel/.bash_profile ] && cp etc/skel/.bash_profile /etc/skel/
+    cp -r etc/skel/.config/steamOs/* /etc/skel/.config/steamOs/ 2>/dev/null || true
+
+    mkdir -p "$USER_HOME/.config/steamOs"
+    cp -r etc/skel/.config/steamOs/* "$USER_HOME/.config/steamOs/" 2>/dev/null || true
+    
+    # Critical: Set permissions for Zero-Sudoers operation
+    chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/steamOs"
+}
+
+# --- 4. Shim Layer (Symlinks) ---
+setup_shim_links() {
+    info "Creating SteamOS shim layer (symlinks)..."
+    mkdir -p /usr/bin/steamos-polkit-helpers
+
+    ln -sf /usr/local/bin/steamos-session-select /usr/bin/steamos-session-select
+    ln -sf /usr/local/bin/steamos-helpers/steamos-update /usr/bin/steamos-update
+    ln -sf /usr/local/bin/steamos-helpers/steamos-update /usr/bin/steamos-polkit-helpers/steamos-update
+    ln -sf /usr/local/bin/steamos-helpers/jupiter-biosupdate /usr/bin/steamos-polkit-helpers/jupiter-biosupdate
+    ln -sf /usr/local/bin/steamos-helpers/steamos-set-timezone /usr/bin/steamos-polkit-helpers/steamos-set-timezone
+}
+
+# --- 5. Bash Profile Integration ---
+setup_bash_profile() {
+    info "Configuring .bash_profile..."
+    BP_FILE="$USER_HOME/.bash_profile"
+    [ ! -f "$BP_FILE" ] && touch "$BP_FILE"
+
+    if ! grep -q "steamos-session-launch" "$BP_FILE"; then
+        cat << 'EOF' >> "$BP_FILE"
+
+# --- STEAMOS-DIY TRIGGER ---
+if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
+    LAUNCHER="/usr/local/bin/steamos-session-launch"
+    if [[ -x "$LAUNCHER" ]]; then
+        [[ -f /etc/default/steamos-diy ]] && . /etc/default/steamos-diy
+        exec "$LAUNCHER" >/dev/null 2>&1
+    fi
+fi
+[[ -f ~/.bashrc ]] && . ~/.bashrc
+# ---------------------------
+EOF
+        chown "$REAL_USER:$REAL_USER" "$BP_FILE"
+        success "Trigger added to .bash_profile"
+    else
+        info "Trigger already exists in .bash_profile"
+    fi
+}
+
+# --- 6. Finalization ---
+finalize_system() {
+    info "Reloading system daemons..."
+    systemctl daemon-reload
+    systemctl enable getty@tty1.service
+    
+    echo -e "\n${GREEN}==================================================${NC}"
+    success "INSTALLATION COMPLETE!"
+    echo -e "${GREEN}==================================================${NC}"
+    warn "Please REBOOT your system to enter Game Mode."
+    echo -e "SteamMachine-DIY is now configured for user: $REAL_USER"
+    echo -e "${GREEN}==================================================${NC}\n"
+}
+
+# --- Execution ---
+check_gpu_and_drivers
+install_dependencies
+deploy_files
+setup_shim_links
+setup_bash_profile
+finalize_system
