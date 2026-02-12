@@ -1,9 +1,12 @@
 #!/bin/bash
 # =============================================================================
-# PROJECT:     SSOTH - Session Switcher
-# DESCRIPTION: Dispatcher to trigger session switches between Steam and Desktop.
-#              Ensures atomic state updates and graceful session termination.
-# LICENSE:     MIT
+# PROJECT:      SteamMachine-DIY - Session Switcher (Trigger)
+# Version:      1.0.0
+# DESCRIPTION:  Dispatcher to trigger session switches between Steam and Desktop.
+# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
+# REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
+# PATH:         /usr/local/bin/steamos-session-select
+# LICENSE:      MIT
 # =============================================================================
 
 # --- 1. CORE INITIALIZATION ---
