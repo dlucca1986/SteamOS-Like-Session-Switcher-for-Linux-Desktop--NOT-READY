@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=Game_Mode
+Name=Return to Gaming Mode
 Exec=steamos-session-select steam
 Icon=steam
 Terminal=false
