@@ -85,30 +85,38 @@ if [ -f /usr/bin/gamescope ]; then
     setcap -r /usr/bin/gamescope 2>/dev/null || true
 fi
 
-# --- 8. Restore Display Manager ---
-
+# --- 8. Restore Display Manager (Funzione + Chiamata) ---
 restore_display_manager() {
     warn "SteamMachine-DIY is removed. You might want to re-enable a Display Manager."
+    # Cerchiamo i DM installati nel sistema
     for dm in sddm gdm lightdm lxdm; do
-        if pacman -Qs "$dm" > /dev/null; then
+        if pacman -Qs "^$dm$" > /dev/null 2>&1; then
             echo -ne "${CYAN}Detected $dm. Re-enable it? [y/N] ${NC}"
             read -r reconfirm
             if [[ $reconfirm == [yY] ]]; then
                 systemctl enable "$dm"
                 success "$dm enabled."
-                break
+                return 0 # Esci dopo averne abilitato uno
             fi
         fi
     done
 }
 
 # --- 9. Finalization ---
+restore_display_manager
+
 info "Reloading system daemons..."
 systemctl daemon-reload
+
+# Definiamo la lista esatta per trasparenza (deve corrispondere a quella dell'installer)
+REMAINING_PKGS="steam gamescope xorg-xwayland mangohud gamemode vulkan-icd-loader mesa-utils python-pyqt6 pciutils procps-ng"
 
 echo -e "\n${GREEN}==================================================${NC}"
 success "UNINSTALLATION COMPLETE!"
 echo -e "${GREEN}==================================================${NC}"
 info "System restored to standard behavior."
-warn "Note: Installed packages (steam, gamescope, etc.) were NOT removed."
+echo -e "\n${YELLOW}NOTE: The following packages were NOT removed:${NC}"
+echo -e "      $REMAINING_PKGS"
+echo -e "\nIf you want to remove them, run:"
+echo -e "sudo pacman -Rs $REMAINING_PKGS"
 echo -e "${GREEN}==================================================${NC}\n"
