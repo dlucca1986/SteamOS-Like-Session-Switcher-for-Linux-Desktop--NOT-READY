@@ -124,10 +124,18 @@ deploy_files() {
 
     # Binaries
     mkdir -p /usr/local/bin/steamos-helpers
+    
+    info "Copying binaries to /usr/local/bin..."
     cp usr/local/bin/steamos-* /usr/local/bin/ 2>/dev/null || true
     cp usr/local/bin/sdy /usr/local/bin/ 2>/dev/null || true
+    cp usr/local/bin/restore_system /usr/local/bin/ 2>/dev/null || true
+    cp usr/local/bin/backup_system /usr/local/bin/ 2>/dev/null || true
     cp usr/local/bin/steamos-helpers/* /usr/local/bin/steamos-helpers/ 2>/dev/null || true
-    chmod +x /usr/local/bin/steamos-* /usr/local/bin/sdy /usr/local/bin/steamos-helpers/*
+    chmod +x /usr/local/bin/steamos-* \
+             /usr/local/bin/sdy \
+             /usr/local/bin/restore_system \
+             /usr/local/bin/backup_system \
+             /usr/local/bin/steamos-helpers/* 2>/dev/null || true
 
     # Applications (.desktop) & Database Refresh
     mkdir -p /usr/local/share/applications/
