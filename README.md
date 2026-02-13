@@ -107,14 +107,13 @@ The installer is interactive and will automatically configure the SSOTH environm
    sudo ./install.sh
    ```    
 
-* 💡 **Note**: The installer is interactive and will automatically verify your AMD/Intel hardware, install missing dependencies, and configure the necessary system permissions.
-
+* 💡 **Note**: The interactive installer automatically detects your AMD, Intel, or NVIDIA hardware, handles all dependencies, and sets up the system for you.
 ---
 
 ## 🗑️ Uninstallation
-If you wish to revert all changes, I’ve included a dedicated uninstaller. 
+In line with the KISS philosophy, I’ve included a dedicated uninstaller. 
 
-It will completely remove all scripts, symbolic links, desktop shortcuts, and the sudoers rule:
+It will cleanly revert all changes, removing all scripts, links, and configurations to leave your system exactly as it was.
 
 ```bash
 chmod +x uninstall.sh
