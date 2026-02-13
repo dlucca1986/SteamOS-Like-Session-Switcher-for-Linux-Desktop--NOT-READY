@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Drivers](https://img.shields.io/badge/Drivers-Full%20Open--Source-orange.svg)](#)
 
-> ### "The most robust, hardware-agnostic, and 100% open-source driver experience for the Arch ecosystem."
+> ### "An open-source bridge to bring the SteamOS experience to Arch Linux, designed to work across AMD, Intel, and NVIDIA hardware."
 
 ---
 
