@@ -1,6 +1,8 @@
 [Desktop Entry]
-Name=Return to Gaming Mode
-Exec=steamos-session-select steam
+Name=Return To Game Mode
+Comment=Switch session back to Steam Gaming Mode
+Exec=/usr/local/bin/steamos-session-select steam
 Icon=steam
 Terminal=false
 Type=Application
+Categories=System;Game;
