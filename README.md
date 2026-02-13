@@ -94,16 +94,16 @@ The installer is interactive and will automatically configure the SSOTH environm
    ```
 
 2. **Enter the folder**:
-   ```
+   ```bash
    cd SteamMachine-DIY
    ```
   
 3. **Set Permission**:
-   ```
+   ```bash
    chmod +x install.sh
    ```
 4. **Run the Installer**:
-    ```
+    ```bash
    sudo ./install.sh
    ```    
 
