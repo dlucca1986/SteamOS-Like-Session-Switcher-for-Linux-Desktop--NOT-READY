@@ -50,13 +50,15 @@ ssoth_banner() {
     # Clear screen and reset cursor position
     printf "\033[H\033[2J\033[3J"
 
-    # --- ASCII Logo and Session Info (Fixed Alignment) ---
-    printf "${C}    ◢██████◣    ${C}◢◤ ${WHITE}SteamOs-Diy${R}\n"
-    printf "${C}  ██◤      ◥██  ${G}━━━━━━━━━━━━━━━━━━━━━━━${R}\n"
-    printf "${C}  ██          ██  ${G}Powered by KISS${R}\n"
-    printf "${C}  ██◣      ◢██  ${WHITE}USER   : ${G}%s${R}\n" "${CONSOLE_USER}"
-    printf "${C}    ◥██████◤    ${WHITE}MODE   : ${C}%-10s${R}\n" "${MODE^^}"
-    printf "                   ${WHITE}STATUS : ${G}%s${R}\n" "${STATUS_MSG^^}"
+    # --- Vertical Stack Layout ---
+    printf "${C} ◢◤ ${WHITE}SteamOs-Diy${R}\n"
+    printf "    ${G}Powered by KISS${R}\n"
+    printf "${G} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}\n"
+    printf "  ${WHITE}USER   : ${G}%-20s${R}\n" "${CONSOLE_USER}"
+    printf "  ${WHITE}MODE   : ${C}%-20s${R}\n" "${MODE^^}"
+    printf "  ${WHITE}STATUS : ${C}%-20s${R}\n" "${STATUS_MSG^^}"
+    printf "${G} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}\n"
+    printf "  ${G}v1.0${R}\n"
     
     sync
 }
