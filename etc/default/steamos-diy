@@ -51,7 +51,6 @@ ssoth_banner() {
     printf "\033[H\033[2J\033[3J"
 
     # --- ASCII Logo and Session Info (Fixed Alignment) ---
-    # Usiamo spazi standard ed evitiamo tabulazioni nascoste
     printf "${C}    ◢██████◣    ${C}◢◤ ${WHITE}SteamOs-Diy${R}\n"
     printf "${C}  ██◤      ◥██  ${G}━━━━━━━━━━━━━━━━━━━━━━━${R}\n"
     printf "${C}  ██          ██  ${G}Powered by KISS${R}\n"
