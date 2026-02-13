@@ -75,6 +75,8 @@ while true; do
             log_info "Executing: $LAUNCH_CMD"
             START_TIME=$(date +%s)
             eval "${LAUNCH_CMD}" >> "${LOG_FILE}" 2>&1
+            ssoth_banner "STEAM" "CLOSING..."
+            sleep 0.8
 
             # --- 3. EXIT & CRASH HANDLING ---
             DURATION=$(($(date +%s) - START_TIME))
@@ -96,6 +98,8 @@ while true; do
 
             # Start Wayland session with SSOTH environment variables.
             env ${PLASMA_ENV} /usr/bin/startplasma-wayland >> "${LOG_FILE}" 2>&1
+            ssoth_banner "DESKTOP" "CLOSING..."
+            sleep 0.8
 
             # Atomic switch back to Steam for next boot.
             echo "steam" > "${NEXT_SESSION_FILE}.tmp" && mv "${NEXT_SESSION_FILE}.tmp" "${NEXT_SESSION_FILE}"
