@@ -166,14 +166,30 @@ setup_shim_links() {
 # --- 5. Bash Profile Integration ---
 setup_bash_profile() {
     info "Integrating .bash_profile trigger..."
+    
     BP_FILE="$USER_HOME/.bash_profile"
+    TEMPLATE="etc/skel/.bash_profile"
+    
+    # Crea il file se non esiste per evitare errori di lettura
     [ ! -f "$BP_FILE" ] && touch "$BP_FILE"
 
+    # Controllo di sicurezza: verifichiamo se il trigger è già presente
     if ! grep -q "steamos-session-launch" "$BP_FILE"; then
-        cat << EOF >> "$BP_FILE"
+        if [ -f "$TEMPLATE" ]; then
+            info "Appending trigger from template..."
+            # Aggiungiamo una riga vuota di sicurezza e poi il contenuto del template
+            echo "" >> "$BP_FILE"
+            cat "$TEMPLATE" >> "$BP_FILE"
+            
+            # Applichiamo i permessi corretti all'utente reale
+            chown "$REAL_USER:$REAL_USER" "$BP_FILE"
+            success "Trigger successfully added to $BP_FILE"
+        else
+            warn "Template $TEMPLATE not found! Using fallback HEREDOC..."
+            # Fallback nel caso il file template mancasse nel repo locale
+            cat << EOF >> "$BP_FILE"
 
 # --- BEGIN STEAMOS-DIY TRIGGER ---
-# Auto-start Game Mode on TTY1 if no display is active
 if [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]]; then
     LAUNCHER="/usr/bin/steamos-session-launch"
     if [[ -x "\$LAUNCHER" ]]; then
@@ -184,8 +200,10 @@ fi
 [[ -f ~/.bashrc ]] && . ~/.bashrc
 # --- END STEAMOS-DIY TRIGGER ---
 EOF
-        chown "$REAL_USER:$REAL_USER" "$BP_FILE"
-        success "Trigger added to .bash_profile"
+            chown "$REAL_USER:$REAL_USER" "$BP_FILE"
+        fi
+    else
+        info "Trigger already detected in .bash_profile. Skipping."
     fi
 }
 
