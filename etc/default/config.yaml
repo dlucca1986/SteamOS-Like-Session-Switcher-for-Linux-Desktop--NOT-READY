@@ -1,7 +1,11 @@
 # =============================================================================
 # PROJECT:      SteamMachine-DIY - SSOTH (Single Source of Truth)
-# VERSION:      1.3.0 - YAML Architecture
+# VERSION:      1.0.0 - YAML Architecture
 # DESCRIPTION:  Centralized System Identity and Global Paths.
+# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
+# REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
+# NOTE:         This is a TEMPLATE. The installer generates the real file
+#               at /etc/default/config.yaml during installation.
 # =============================================================================
 
 system:
