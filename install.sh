@@ -86,7 +86,7 @@ install_dependencies() {
         pacman -Syu --noconfirm
     fi
 
-    BASE_PKGS="steam gamescope xorg-xwayland mangohud lib32-mangohud gamemode lib32-gamemode vulkan-icd-loader lib32-vulkan-icd-loader mesa-utils python-pyqt6 pciutils procps-ng"
+    BASE_PKGS="python python-pyqt6 python-yaml steam gamescope xorg-xwayland mangohud lib32-mangohud gamemode lib32-gamemode vulkan-icd-loader lib32-vulkan-icd-loader mesa-utils pciutils procps-ng"
     
     info "Installing core dependencies..."
     pacman -S --needed --noconfirm $BASE_PKGS
