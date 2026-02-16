@@ -13,61 +13,50 @@ import os
 import time
 import subprocess
 
-
 def log_msg(msg):
-    """Invia un messaggio al journal di sistema per il Control Center."""
-    subprocess.run(["logger", "-t", "steamos-diy", f"[LAUNCHER] {msg}"],
-                   check=False)
-
+    subprocess.run(["logger", "-t", "steamos-diy", f"[LAUNCHER] {msg}"], check=False)
 
 def run():
     # 1. Carica SSoT
     conf = {}
-    ssot_path = "/etc/default/steamos_diy.conf"
-    with open(ssot_path, "r") as f:
+    with open("/etc/default/steamos_diy", "r") as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 k, v = line.split("=", 1)
-                val = v.strip().strip('"').strip("'")
-                key = k.strip()
-                conf[key] = val
-                # Iniezione automatica variabili d'ambiente
-                os.environ[key] = val
+                conf[k.strip()] = v.strip().strip('"').strip("'")
 
-    # 2. Ciclo infinito di sessione
+    # 2. Configura l'ambiente una sola volta (Calibrato)
+    # Applichiamo solo le variabili specifiche del Desktop Environment
+    for k, v in conf.items():
+        if k.startswith(("XDG_", "KDE_")):
+            os.environ[k] = v
+
     while True:
+        # 3. Leggi il target
         try:
             with open(conf['next_session'], "r") as f:
                 target = f.read().strip()
-        except (FileNotFoundError, KeyError):
+        except:
             target = "steam"
 
+        # 4. Esecuzione e Switch (Anti-Loop)
         if target == "steam":
-            log_msg("Avvio sessione STEAM (Game Mode).")
-            # Comando pulito usando i binari dal SSoT
-            cmd = [
-                conf['bin_gs'], "-e", "-f", "--",
-                conf['bin_steam'], "-gamepadui", "-steamos3"
-            ]
+            log_msg("Avvio STEAM (Game Mode)...")
+            cmd = [conf['bin_gs'], "-e", "-f", "--", conf['bin_steam'], "-gamepadui", "-steamos3"]
             subprocess.run(cmd)
-            log_msg("Sessione Steam terminata. Switch a Desktop impostato.")
             next_val = "desktop"
         else:
-            log_msg("Avvio sessione DESKTOP (Plasma).")
-            # Avvio Plasma usando il binario dal SSoT
+            log_msg("Avvio DESKTOP (Plasma)...")
             subprocess.run([conf['bin_plasma']])
-            log_msg("Sessione Desktop terminata. Switch a Steam impostato.")
             next_val = "steam"
 
-        # 3. Scrittura atomica
-        next_session_file = conf['next_session']
-        tmp = f"{next_session_file}.tmp"
+        # 5. Scrittura atomica per il prossimo boot/crash
+        tmp = f"{conf['next_session']}.tmp"
         with open(tmp, "w") as f:
             f.write(next_val)
-        os.replace(tmp, next_session_file)
-
+        os.replace(tmp, conf['next_session'])
+        
         time.sleep(0.5)
-
 
 if __name__ == "__main__":
     run()
