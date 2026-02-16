@@ -8,20 +8,6 @@
 # LICENSE:      MIT
 # =============================================================================
 
-Certamente, Daniele. Ho tradotto tutti i commenti e le stringhe di testo in inglese, integrando le migliorie di stabilità (come l'unmask della Getty e la pulizia di /etc/skel) per renderlo speculare all'installer che abbiamo appena rifinito.
-
-Ecco il codice completo e pulito:
-
-Bash
-#!/bin/bash
-# =============================================================================
-# PROJECT:      SteamMachine-DIY - Master Uninstaller
-# VERSION:      1.0.1
-# DESCRIPTION:  Surgical removal of DIY components and environment restoration.
-# REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
-# LICENSE:      MIT
-# =============================================================================
-
 set -e
 
 # --- Colors & UI ---
