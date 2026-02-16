@@ -78,23 +78,30 @@ cleanup_files() {
         "/usr/bin/jupiter-biosupdate"
         "/usr/bin/steamos-select-branch"
         "/usr/bin/steamos-update"
-        "/usr/bin/steamos-polkit-helpers"
     )
 
-    # Clean up symlinks or real files in /usr/bin/
+    # Clean up symlinks
     for link in "${SYMLINKS[@]}"; do
         if [ -L "$link" ] || [ -e "$link" ]; then
-            rm -rf "$link"
+            rm -f "$link"
         fi
     done
+
+    # Remove the Polkit Helpers directory and its content
+    if [ -d /usr/bin/steamos-polkit-helpers ]; then
+        rm -rf /usr/bin/steamos-polkit-helpers
+        info "Polkit helpers directory removed."
+    fi
 
     # Remove core directories and global configs
     rm -rf /usr/local/lib/steamos_diy
     rm -f /etc/default/steamos_diy.conf
     rm -rf /var/lib/steamos_diy
     
-    # Cleanup /etc/skel templates
+    # Cleanup /etc/skel and Desktop entries
     rm -rf /etc/skel/.config/steamos_diy
+    rm -f /usr/share/applications/return_to_gamemode.desktop
+    rm -f "$USER_HOME/Desktop/return_to_gamemode.desktop"
     
     # Optional: cleanup user config folder
     echo -ne "${YELLOW}Remove user configuration folder (~/.config/steamos_diy)? [y/N] ${NC}"
