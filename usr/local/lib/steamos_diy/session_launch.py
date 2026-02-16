@@ -25,8 +25,7 @@ def run():
                 k, v = line.split("=", 1)
                 conf[k.strip()] = v.strip().strip('"').strip("'")
 
-    # 2. Configura l'ambiente una sola volta (Calibrato)
-    # Applichiamo solo le variabili specifiche del Desktop Environment
+    # 2. Configura l'ambiente
     for k, v in conf.items():
         if k.startswith(("XDG_", "KDE_")):
             os.environ[k] = v
@@ -39,10 +38,23 @@ def run():
         except:
             target = "steam"
 
-        # 4. Esecuzione e Switch (Anti-Loop)
+        # 4. Esecuzione e Switch
         if target == "steam":
             log_msg("Avvio STEAM (Game Mode)...")
-            cmd = [conf['bin_gs'], "-e", "-f", "--", conf['bin_steam'], "-gamepadui", "-steamos3"]
+            
+            # Caricamento dinamico parametri Gamescope dal manifesto
+            gs_params = []
+            if os.path.exists(conf['user_config']):
+                with open(conf['user_config'], "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and not "=" in line:
+                            gs_params.extend(line.split())
+            
+            # Parametri di base se il manifesto è vuoto
+            if not gs_params: gs_params = ["-e", "-f"]
+            
+            cmd = [conf['bin_gs']] + gs_params + ["--", conf['bin_steam'], "-gamepadui", "-steamos3"]
             subprocess.run(cmd)
             next_val = "desktop"
         else:
@@ -50,7 +62,7 @@ def run():
             subprocess.run([conf['bin_plasma']])
             next_val = "steam"
 
-        # 5. Scrittura atomica per il prossimo boot/crash
+        # 5. Scrittura atomica
         tmp = f"{conf['next_session']}.tmp"
         with open(tmp, "w") as f:
             f.write(next_val)
