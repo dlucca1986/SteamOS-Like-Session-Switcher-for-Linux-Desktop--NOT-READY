@@ -210,16 +210,34 @@ EOF
 # --- 6. Display Manager Management ---
 manage_display_manager() {
     info "Managing Display Managers..."
-    CURRENT_DM=$(systemctl list-unit-files --type=service | grep display-manager | awk '{print $1}' | head -n 1) || true
     
-    if [[ -n "$CURRENT_DM" ]]; then
+    # Identify the currently enabled display manager (sddm, gdm, lightdm, etc.)
+    # We look for the symbolic link 'display-manager.service'
+    CURRENT_DM_PATH=$(systemctl list-unit-files --type=service | grep "display-manager.service" | awk '{print $1}') || true
+    
+    # If no generic alias is found, we probe for common specific services
+    if [[ -z "$CURRENT_DM_PATH" ]]; then
+        CURRENT_DM=$(systemctl list-units --type=service --state=running | grep -E 'sddm|gdm|lightdm|lxdm' | awk '{print $1}' | head -n 1)
+    else
+        # Resolve the actual service name if using the generic alias
+        CURRENT_DM=$(basename "$(readlink /etc/systemd/system/display-manager.service)" 2>/dev/null || echo "$CURRENT_DM_PATH")
+    fi
+
+    if [[ -n "$CURRENT_DM" && "$CURRENT_DM" != "getty@tty1.service" ]]; then
         warn "Detected active Display Manager: $CURRENT_DM"
-        echo -ne "${YELLOW}Disable $CURRENT_DM to boot directly into Game Mode? [y/N] ${NC}"
+        echo -e "${YELLOW}NOTE: To boot directly into Game Mode, your current Display Manager must be disabled.${NC}"
+        echo -ne "${YELLOW}Disable $CURRENT_DM now? [y/N] ${NC}"
         read -r confirm_dm
+        
         if [[ $confirm_dm == [yY] ]]; then
+            # Stop it now and prevent it from starting on next boot
             systemctl disable "$CURRENT_DM"
-            success "$CURRENT_DM disabled."
+            success "$CURRENT_DM has been disabled. System will now default to TTY1."
+        else
+            warn "Display Manager remains enabled. You might need to disable it manually to start Game Mode."
         fi
+    else
+        info "No active Display Manager detected. TTY1 is clear for Game Mode."
     fi
 }
 
