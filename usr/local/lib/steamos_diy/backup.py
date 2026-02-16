@@ -74,7 +74,7 @@ def run_backup():
     user_home = Path(ssot.get('user_home', '/root'))
     user_config_path = Path(ssot.get('user_config',
                             user_home / ".config/steamos_diy/config")).parent
-    
+
     backup_root = user_config_path / "backups"
     backup_root.mkdir(parents=True, exist_ok=True)
 
