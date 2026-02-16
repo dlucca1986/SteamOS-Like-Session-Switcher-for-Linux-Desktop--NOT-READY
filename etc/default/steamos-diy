@@ -1,6 +1,6 @@
 # =============================================================================
 # PROJECT:      SteamOS-DIY - SSOTH (Single Source of Truth)
-# Version:      1.0.0
+# Version:      1.0.0 - Phyton
 # DESCRIPTION:  Centralized System Identity and Global Paths.
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
 # REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
@@ -9,55 +9,19 @@
 # LICENSE:      MIT
 # =============================================================================
 
-# --- 1. SYSTEM IDENTITY ---
-# These placeholders ([USERNAME] and [USERID]) are replaced by the installer.
-export CONSOLE_USER="[USERNAME]"
-export USER_ID="[USERID]"
+# --- SYSTEM PATHS ---
+user=lelo
+uid=1000
+next_session=/var/lib/steamos-diy/next_session
+user_config=/home/lelo/.config/steamOs/config
+games_conf_dir=/home/lelo/.config/steamOs/games.d
 
-# --- 2. ENVIRONMENT ---
-# Dynamically handles session bus and runtime paths based on the User ID.
-export XDG_RUNTIME_DIR="/run/user/${USER_ID}"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${USER_ID}/bus"
+# --- BINARIES ---
+bin_gs=/usr/bin/gamescope
+bin_steam=/usr/bin/steam
+bin_plasma=/usr/bin/startplasma-wayland
 
-# --- 3. SSOTH CORE PATHS ---
-# All paths are derived from the CONSOLE_USER to remain agnostic.
-export CONFIG_DIR="/home/${CONSOLE_USER}/.config/steamOs"
-export NEXT_SESSION_FILE="${CONFIG_DIR}/next_session"
-export LOG_FILE="${CONFIG_DIR}/session.log"
-export GAMES_CONF_DIR="${CONFIG_DIR}/games"
-export STEAM_CONSOLE_LOG="/home/${CONSOLE_USER}/.local/share/Steam/logs/console-linux.txt"
-
-# --- 4. DESKTOP SESSION CONFIG ---
-# Standard environment for launching Plasma Wayland from a TTY.
-export PLASMA_ENV="XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_WM_SYSTEMD_MANAGED=0"
-
-# --- 5. UI & VISUAL ENGINE ---
-# Centralized function for TTY visual feedback during session switches.
-
-ssoth_banner() {
-    # Only run if output is a terminal
-    [ -t 1 ] || exec 1>/dev/tty1 2>/dev/null
-
-    local MODE="${1:-STEAM}"
-    local STATUS_MSG="${2:-READY}"
-    local WHITE='\033[1;37m' G='\033[0;90m' R='\033[0m'
-
-    # Dynamic color scheme based on session type
-    local C='\033[1;34m' # Blue for Steam
-    [[ "${MODE^^}" == "PLASMA" || "${MODE^^}" == "DESKTOP" ]] && C='\033[1;32m' # Green for Desktop
-    [[ "${MODE^^}" == "CRASH" ]] && C='\033[1;31m' # Red for Errors
-
-    # Clear screen and reset cursor position
-    printf "\033[H\033[2J\033[3J"
-
-    # --- Refined Minimalist Layout ---
-    printf "${C} ◢◤ ${WHITE}SteamOs-Diy ${G}v1.0${R}\n"
-    printf "    ${G}Powered by KISS${R}\n"
-    printf "${G} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}\n"
-    printf "  ${WHITE}User   : ${G}%s${R}\n" "${CONSOLE_USER}"
-    printf "  ${WHITE}Mode   : ${C}%s${R}\n" "${MODE^^}"
-    printf "  ${WHITE}Status : ${C}● ${R}${C}%s${R}\n" "${STATUS_MSG^^}"
-    printf "${G} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}\n"
-    
-    sync
-}
+# --- DESKTOP ENVIRONMENT SETTINGS ---
+XDG_SESSION_TYPE=wayland
+XDG_CURRENT_DESKTOP=KDE
+KDE_WM_SYSTEMD_MANAGED=0
