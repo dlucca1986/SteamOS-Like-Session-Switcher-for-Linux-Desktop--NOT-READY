@@ -105,9 +105,10 @@ def run():
         extra_args = game_specific.get("GAME_EXTRA_ARGS", extra_args)
 
         # Inject game-specific variables
+        # Fixed E128: properly indented continuation line
         for k, v in game_specific.items():
-            if isinstance(v, str) and k not in ["GAME_WRAPPER",
-                                               "GAME_EXTRA_ARGS"]:
+            if (isinstance(v, str) and
+                    k not in ["GAME_WRAPPER", "GAME_EXTRA_ARGS"]):
                 final_env[k] = v
 
     # 4. EXECUTION
