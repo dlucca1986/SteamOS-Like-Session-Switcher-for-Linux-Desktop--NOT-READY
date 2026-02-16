@@ -1,16 +1,19 @@
 # --- BEGIN STEAMOS-DIY TRIGGER ---
-# Questo blocco avvia la sessione Game Mode solo su TTY1 e se non c'è già un'interfaccia grafica.
+# This block automatically starts the Game Mode session only on TTY1 
+# and only if no other graphical display is already running.
 if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
     LAUNCHER="/usr/bin/steamos-session-launch"
+    
     if [[ -x "$LAUNCHER" ]]; then
-        # Carica le variabili globali (SSOTH) se il file esiste
+        # Load global environment variables (SSOTH) if the config file exists
         [[ -f /etc/default/steamos_diy.conf ]] && . /etc/default/steamos_diy.conf
         
-        # Avvia il launcher reindirizzando l'output al log di sistema (journald)
+        # Execute the launcher and redirect all output (stdout/stderr) 
+        # to the system log via journald (accessible via 'journalctl -t steamos-diy')
         exec "$LAUNCHER" > >(logger -t steamos-diy) 2>&1
     fi
 fi
 
-# Carica il bashrc standard se presente
+# Load the standard bashrc for interactive shell features
 [[ -f ~/.bashrc ]] && . ~/.bashrc
 # --- END STEAMOS-DIY TRIGGER ---
