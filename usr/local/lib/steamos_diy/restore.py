@@ -5,6 +5,7 @@
 # DESCRIPTION:  Full system restoration and dynamic symlink reconstruction.
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
 # PATH:         /usr/local/lib/steamos_diy/restore.py
+# LICENSE:      MIT
 # =============================================================================
 
 import os
