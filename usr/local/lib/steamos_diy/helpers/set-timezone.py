@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # =============================================================================
 # PROJECT:      SteamMachine-DIY
-# VERSION:      1.0.0 - Phyton
+# VERSION:      1.0.0 - Python
 # DESCRIPTION:  Compatibility shim for SteamOS OTA update infrastructure.
 #               Returns Exit Code 7 to simulate an "Up to Date" status.
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
