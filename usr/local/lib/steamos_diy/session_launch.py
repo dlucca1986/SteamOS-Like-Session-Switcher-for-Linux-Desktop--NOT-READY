@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # =============================================================================
 # PROJECT:      SteamMachine-DIY - Session Launcher
-# VERSION:      1.0.0 - Pyton
+# VERSION:      1.0.0 - Python
 # DESCRIPTION:  Core Session Manager with Dynamic Gamescope Mapping.
 #               Handles seamless transitions between Steam and Desktop.
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
