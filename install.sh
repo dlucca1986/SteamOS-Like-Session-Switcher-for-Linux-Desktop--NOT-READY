@@ -3,6 +3,7 @@
 # PROJECT:      SteamMachine-DIY - Master Installer
 # VERSION:      1.0.0 - Unified Agnostic Logic
 # DESCRIPTION:  Hardware Audit, Dependency Management & Template Personalization.
+# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
 # REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
 # LICENSE:      MIT
 # =============================================================================
