@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # =============================================================================
 # PROJECT:      SteamMachine-DIY - Session Launcher
-# VERSION:      1.0.0 - Phyton
+# VERSION:      1.0.0 - Pyton
 # DESCRIPTION:  Core Session Manager with Dynamic Gamescope Mapping.
 #               Handles seamless transitions between Steam and Desktop.
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
@@ -19,7 +19,7 @@ def log_msg(msg):
 def run():
     # 1. Carica SSoT
     conf = {}
-    with open("/etc/default/steamos_diy", "r") as f:
+    with open("/etc/default/steamos_diy.conf", "r") as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 k, v = line.split("=", 1)
