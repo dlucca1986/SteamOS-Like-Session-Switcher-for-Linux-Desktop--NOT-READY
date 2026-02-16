@@ -40,7 +40,7 @@ def get_ssot():
     # Fallback home path
     if 'user' in conf and not conf.get('user_home'):
         conf['user_home'] = f"/home/{conf['user']}"
-    
+
     return conf
 
 
@@ -60,7 +60,7 @@ def run_restore(archive_path):
     user_home = Path(ssot.get('user_home', '/root'))
     user_config_dir = Path(ssot.get('user_config',
                            user_home / ".config/steamos_diy/config")).parent
-    
+
     mapping = {
         "system/next_session": ssot.get('next_session'),
         "system/steamos_diy.conf": "/etc/default/steamos_diy.conf",
@@ -77,7 +77,7 @@ def run_restore(archive_path):
                     target = mapping[member.name]
                     # Create parent directories if missing
                     os.makedirs(os.path.dirname(target), exist_ok=True)
-                    
+
                     # Manual extraction to handle path/name mapping
                     member.name = os.path.basename(target)
                     tar.extract(member, path=os.path.dirname(target))
