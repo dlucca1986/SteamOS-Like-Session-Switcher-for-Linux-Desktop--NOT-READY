@@ -5,6 +5,7 @@
 # DESCRIPTION:  Chirurgical backup with dynamic symlink recovery script.
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
 # PATH:         /usr/local/lib/steamos_diy/backup_tool.py
+# LICENSE:      MIT
 # =============================================================================
 
 import os
