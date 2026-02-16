@@ -1,0 +1,31 @@
+# =============================================================================
+# PROJECT:      SteamMachine-DIY - SSOTH (Single Source of Truth)
+# VERSION:      1.3.0 - YAML Architecture
+# DESCRIPTION:  Centralized System Identity and Global Paths.
+# =============================================================================
+
+system:
+  user: "[USERNAME]"
+  uid: [USERID]
+  # Desktop Environment Settings
+  env:
+    XDG_SESSION_TYPE: "wayland"
+    XDG_CURRENT_DESKTOP: "KDE"
+    KDE_WM_SYSTEMD_MANAGED: 0
+
+paths:
+  # Atomic session state
+  next_session_file: "/var/lib/steamos_diy/next_session"
+  # User specific directories
+  user_config: "/home/[USERNAME]/.config/steamos_diy/config"
+  games_conf_dir: "/home/[USERNAME]/.config/steamos_diy/games.d"
+
+binaries:
+  # Core system binaries
+  gamescope: "/usr/bin/gamescope"
+  steam: "/usr/bin/steam"
+  plasma: "/usr/bin/startplasma-wayland"
+  # Project symlinks
+  sdy: "/usr/bin/sdy"
+  session_launch: "/usr/bin/steamos-session-launch"
+  session_select: "/usr/bin/steamos-session-select"
