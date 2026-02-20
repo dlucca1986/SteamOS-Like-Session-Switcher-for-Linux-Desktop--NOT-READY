@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
 # PROJECT:      SteamMachine-DIY - Master Installer
-# VERSION:      1.2.0 - DM Management & SSoT Optimized
+# VERSION:      1.3.0 - Update Prompt & Optimized Flow
 # DESCRIPTION:  Hardware Audit, Dependency Management & Service Configuration.
 # =============================================================================
 
@@ -28,7 +28,17 @@ REAL_USER=${SUDO_USER:-$(whoami)}
 USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
 REAL_UID=$(id -u "$REAL_USER")
 
-info "Starting installation for user: $REAL_USER (UID: $REAL_UID)"
+# --- 0. System Update Prompt ---
+ask_system_update() {
+    echo -e "${YELLOW}>>> Do you want to update the system before proceeding? (y/n)${NC}"
+    read -r -p "> " confirm_update
+    if [[ "$confirm_update" =~ ^[Yy]$ ]]; then
+        info "Updating system repositories and packages..."
+        pacman -Syu --noconfirm
+    else
+        info "Skipping system update."
+    fi
+}
 
 # --- 1. Hardware & Driver Audit ---
 check_gpu_and_drivers() {
@@ -60,7 +70,6 @@ install_dependencies() {
         pacman -Sy
     fi
 
-    # Added python-ruamel-yaml for Control Center compatibility
     BASE_PKGS="python python-pyqt6 python-yaml python-ruamel-yaml steam gamescope xorg-xwayland mangohud lib32-mangohud gamemode lib32-gamemode vulkan-icd-loader lib32-vulkan-icd-loader mesa-utils pciutils procps-ng"    
     
     info "Installing core dependencies..."
@@ -72,7 +81,6 @@ install_dependencies() {
     fi
 
     info "Updating user groups for $REAL_USER..."
-    # Including systemd-journal for Control Center log access
     for grp in video render input audio wheel storage autologin systemd-journal; do
         groupadd -f "$grp"
         usermod -aG "$grp" "$REAL_USER"
@@ -83,28 +91,23 @@ install_dependencies() {
 deploy_files() {
     info "Deploying and personalizing files..."
 
-    # 3.1 SSOTH Config (The Agnostic SSoT)
     mkdir -p /etc/default
     cp etc/default/steamos_diy.conf /etc/default/steamos_diy.conf
     sed -i "s|/home/lelo|/home/$REAL_USER|g" /etc/default/steamos_diy.conf
     
-    # 3.2 User Config (Skel to Home)
     info "Deploying user configuration to $USER_HOME..."
     mkdir -p "$USER_HOME/.config/steamos_diy/games.d"
     cp etc/skel/.config/steamos_diy/*.yaml "$USER_HOME/.config/steamos_diy/"
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/steamos_diy"
 
-    # 3.3 Core Library & Helpers
     mkdir -p /usr/local/lib/steamos_diy/helpers
     cp -r usr/local/lib/steamos_diy/* /usr/local/lib/steamos_diy/
     chmod 755 /usr/local/lib/steamos_diy/*.py
     chmod 755 /usr/local/lib/steamos_diy/helpers/*.py
 
-    # 3.4 Applications & Icons
     mkdir -p /usr/local/share/applications
     cp usr/local/share/applications/*.desktop /usr/local/share/applications/
 
-    # 3.5 State Directory
     mkdir -p /var/lib/steamos_diy
     if [ -f var/lib/steamos_diy/next_session ]; then
         cp var/lib/steamos_diy/next_session /var/lib/steamos_diy/next_session
@@ -144,7 +147,6 @@ setup_systemd() {
 # --- 6. Display Manager Management ---
 disable_display_managers() {
     info "Disabling standard Display Managers to avoid TTY1 conflicts..."
-    # Common Display Managers list
     for dm in sddm gdm lightdm lxdm; do
         if systemctl is-enabled "$dm" &>/dev/null; then
             warn "Disabling $dm service..."
@@ -155,6 +157,8 @@ disable_display_managers() {
 }
 
 # --- Execution Flow ---
+info "Starting installation for user: $REAL_USER (UID: $REAL_UID)"
+ask_system_update      # New Step
 check_gpu_and_drivers
 install_dependencies
 deploy_files
