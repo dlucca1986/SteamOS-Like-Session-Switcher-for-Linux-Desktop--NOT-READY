@@ -1,11 +1,8 @@
 #!/bin/bash
 # =============================================================================
 # PROJECT:      SteamMachine-DIY - Master Installer
-# VERSION:      1.0.0 - Unified Agnostic Logic
-# DESCRIPTION:  Hardware Audit, Dependency Management & Template Personalization.
-# PHILOSOPHY:   KISS (Keep It Simple, Stupid)
-# REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
-# LICENSE:      MIT
+# VERSION:      1.1.0 - Agnostic & SSoT Optimized
+# DESCRIPTION:  Hardware Audit, Dependency Management & Path Personalization.
 # =============================================================================
 
 set -e 
@@ -45,31 +42,19 @@ check_gpu_and_drivers() {
             warn "Proprietary Nvidia drivers detected. SKIPPING open-source driver install."
             SKIP_DRIVERS=true
         else
-            info "Nvidia GPU detected (no proprietary drivers). Suggesting Nouveau."
+            info "Nvidia GPU detected. Suggesting Nouveau."
             DRIVER_PKGS="vulkan-nouveau lib32-vulkan-nouveau"
         fi
     elif echo "$GPU_INFO" | grep -iq "amd"; then
         info "AMD GPU detected."
-        if pacman -Qs "vulkan-radeon" > /dev/null; then
-            warn "AMD Vulkan drivers already detected. Skipping driver re-installation."
-            SKIP_DRIVERS=true
-        else
-            info "Suggesting vulkan-radeon for AMD hardware."
-            DRIVER_PKGS="vulkan-radeon lib32-vulkan-radeon"
-        fi
+        pacman -Qs "vulkan-radeon" > /dev/null || DRIVER_PKGS="vulkan-radeon lib32-vulkan-radeon"
     elif echo "$GPU_INFO" | grep -iq "intel"; then
         info "Intel GPU detected."
-        if pacman -Qs "vulkan-intel" > /dev/null; then
-            warn "Intel Vulkan drivers already detected. Skipping driver re-installation."
-            SKIP_DRIVERS=true
-        else
-            info "Suggesting vulkan-intel for Intel hardware."
-            DRIVER_PKGS="vulkan-intel lib32-vulkan-intel"
-        fi
+        pacman -Qs "vulkan-intel" > /dev/null || DRIVER_PKGS="vulkan-intel lib32-vulkan-intel"
     fi
 }
 
-# --- 2. Dependencies & Repositories ---
+# --- 2. Dependencies & Groups ---
 install_dependencies() {
     if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
         info "Enabling multilib repository..."
@@ -77,38 +62,38 @@ install_dependencies() {
         pacman -Sy
     fi
 
-    echo -ne "${YELLOW}Update system (pacman -Syu) first? [y/N] ${NC}"
-    read -r confirm_update
-    [[ $confirm_update == [yY] ]] && pacman -Syu --noconfirm
-
     BASE_PKGS="python python-pyqt6 python-yaml steam gamescope xorg-xwayland mangohud lib32-mangohud gamemode lib32-gamemode vulkan-icd-loader lib32-vulkan-icd-loader mesa-utils pciutils procps-ng"
     
     info "Installing core dependencies..."
     pacman -S --needed --noconfirm $BASE_PKGS
 
-    if [[ "$SKIP_DRIVERS" == "false" && -n "$DRIVER_PKGS" ]]; then
+    if [[ -n "$DRIVER_PKGS" ]]; then
         info "Installing drivers: $DRIVER_PKGS"
         pacman -S --needed --noconfirm $DRIVER_PKGS
     fi
+
+    info "Updating user groups for $REAL_USER..."
+    # Groups: added video, render, input, and autologin as requested
+    for grp in video render input audio wheel storage autologin; do
+        groupadd -f "$grp"
+        usermod -aG "$grp" "$REAL_USER"
+    done
 }
 
-# --- 3. File Deployment & Personalization ---
+# --- 3. File Deployment & SSoT ---
 deploy_files() {
     info "Deploying and personalizing files..."
 
-    # 3.1 SSOTH Config
-    if [ -f etc/default/steamos_diy.conf ]; then
-        cp etc/default/steamos_diy.conf /etc/default/steamos_diy.conf
-        sed -i "s|\[USERNAME\]|$REAL_USER|g" /etc/default/steamos_diy.conf
-        sed -i "s|\[USERID\]|$REAL_UID|g" /etc/default/steamos_diy.conf
-    fi
-
-    # 3.2 TTY1 Autologin
-    mkdir -p /etc/systemd/system/getty@tty1.service.d/
-    if [ -f etc/systemd/system/getty@tty1.service.d/override.conf ]; then
-        cp etc/systemd/system/getty@tty1.service.d/override.conf /etc/systemd/system/getty@tty1.service.d/
-        sed -i "s|\[USERNAME\]|$REAL_USER|g" /etc/systemd/system/getty@tty1.service.d/override.conf
-    fi
+    # 3.1 SSOTH Config (The Agnostic SSoT)
+    mkdir -p /etc/default
+    cp etc/default/steamos_diy.conf /etc/default/steamos_diy.conf
+    sed -i "s|/home/lelo|/home/$REAL_USER|g" /etc/default/steamos_diy.conf
+    
+    # 3.2 User Config (Skel to Home)
+    info "Deploying user configuration to $USER_HOME..."
+    mkdir -p "$USER_HOME/.config/steamos_diy/games.d"
+    cp etc/skel/.config/steamos_diy/*.yaml "$USER_HOME/.config/steamos_diy/"
+    chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/steamos_diy"
 
     # 3.3 Core Library & Helpers
     mkdir -p /usr/local/lib/steamos_diy/helpers
@@ -116,137 +101,48 @@ deploy_files() {
     chmod 755 /usr/local/lib/steamos_diy/*.py
     chmod 755 /usr/local/lib/steamos_diy/helpers/*.py
 
-    # 3.4 Gamescope Caps & Hook
-    info "Setting Gamescope capabilities and ALPM hook..."
-    if [ -f /usr/bin/gamescope ]; then
-        setcap 'cap_sys_admin,cap_sys_nice,cap_ipc_lock+ep' /usr/bin/gamescope
-    fi
-    mkdir -p /usr/share/libalpm/hooks/
-    [ -f usr/share/libalpm/hooks/gamescope-privs.hook ] && cp usr/share/libalpm/hooks/gamescope-privs.hook /usr/share/libalpm/hooks/
+    # 3.4 Applications & Icons
+    mkdir -p /usr/local/share/applications
+    cp usr/local/share/applications/*.desktop /usr/local/share/applications/
 
-# --- 3.5 State Directory & Session Initialization ---
-    info "Deploying state directory and next_session..."
+    # 3.5 State Directory
     mkdir -p /var/lib/steamos_diy
-    
-    # Copy next_session file from repository if it exists
     if [ -f var/lib/steamos_diy/next_session ]; then
         cp var/lib/steamos_diy/next_session /var/lib/steamos_diy/next_session
-        info "next_session initialized from repository."
     else
-        # Fallback if the file is missing from the repo for any reason
         echo "steam" > /var/lib/steamos_diy/next_session
-        warn "next_session not found in repo, creating fallback with 'steam'."
     fi
-
-    # Crucial: set correct ownership and permissions for the real user
-    # This allows the session selector to update the file without root privileges
     chown -R "$REAL_USER:$REAL_USER" /var/lib/steamos_diy
-    chmod 755 /var/lib/steamos_diy
-    chmod 644 /var/lib/steamos_diy/next_session
+    chmod 775 /var/lib/steamos_diy
 }
 
 # --- 4. Shim Layer (Symlinks) ---
 setup_shim_links() {
     info "Creating SteamOS shim layer symlinks..."
     mkdir -p /usr/bin/steamos-polkit-helpers
+    mkdir -p /usr/local/bin
 
-    # Core Binaries
+    # Master Links
     ln -sf /usr/local/lib/steamos_diy/session_launch.py /usr/bin/steamos-session-launch
     ln -sf /usr/local/lib/steamos_diy/session_select.py /usr/bin/steamos-session-select
     ln -sf /usr/local/lib/steamos_diy/sdy.py /usr/bin/sdy
-    ln -sf /usr/local/lib/steamos_diy/backup_tool.py /usr/bin/sdy-backup
-    ln -sf /usr/local/lib/steamos_diy/restore.py /usr/bin/sdy-restore
-
-    # Helpers & Shims
-    ln -sf /usr/local/lib/steamos_diy/helpers/jupiter-biosupdate.py /usr/bin/jupiter-biosupdate
-    ln -sf /usr/local/lib/steamos_diy/helpers/steamos-select-branch.py /usr/bin/steamos-select-branch
-    ln -sf /usr/local/lib/steamos_diy/helpers/steamos-update.py /usr/bin/steamos-update
+    ln -sf /usr/local/lib/steamos_diy/control_center.py /usr/local/bin/sdy-control-center
     
-    # Polkit Helpers
+    # Helpers
     ln -sf /usr/local/lib/steamos_diy/helpers/jupiter-biosupdate.py /usr/bin/steamos-polkit-helpers/jupiter-biosupdate
     ln -sf /usr/local/lib/steamos_diy/helpers/steamos-update.py /usr/bin/steamos-polkit-helpers/steamos-update
     ln -sf /usr/local/lib/steamos_diy/helpers/set-timezone.py /usr/bin/steamos-polkit-helpers/steamos-set-timezone
 }
 
-# --- 5. Bash Profile Integration (Improved Stability) ---
-setup_bash_profile() {
-    info "Integrating .bash_profile trigger..."
+# --- 5. Systemd Service ---
+setup_systemd() {
+    info "Configuring systemd service..."
+    cp etc/systemd/system/steamos_diy.service /etc/systemd/system/
+    # Replace the %u placeholder with the real user
+    sed -i "s/%u/$REAL_USER/g" /etc/systemd/system/steamos_diy.service
     
-    BP_FILE="$USER_HOME/.bash_profile"
-    TEMPLATE="etc/skel/.bash_profile"
-    
-    [ ! -f "$BP_FILE" ] && touch "$BP_FILE"
-
-    if ! grep -q "steamos-session-launch" "$BP_FILE"; then
-        # Create a temporary file with the trigger at the BEGINNING
-        TMP_BP=$(mktemp)
-        
-        if [ -f "$TEMPLATE" ]; then
-            info "Prepending trigger from template..."
-            cat "$TEMPLATE" > "$TMP_BP"
-        else
-            info "Using fallback HEREDOC..."
-            cat << EOF > "$TMP_BP"
-# --- BEGIN STEAMOS-DIY TRIGGER ---
-if [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]]; then
-    LAUNCHER="/usr/bin/steamos-session-launch"
-    if [[ -x "\$LAUNCHER" ]]; then
-        [[ -f /etc/default/steamos_diy.conf ]] && . /etc/default/steamos_diy.conf
-        exec "\$LAUNCHER" > >(logger -t steamos-diy) 2>&1
-    fi
-fi
-# --- END STEAMOS-DIY TRIGGER ---
-EOF
-        fi
-        
-        # Append the old content to the new trigger
-        echo "" >> "$TMP_BP"
-        cat "$BP_FILE" >> "$TMP_BP"
-        mv "$TMP_BP" "$BP_FILE"
-        
-        chown "$REAL_USER:$REAL_USER" "$BP_FILE"
-        success "Trigger successfully prepended to $BP_FILE"
-    else
-        info "Trigger already detected in .bash_profile. Skipping."
-    fi
-}
-
-# --- 6. Display Manager Management ---
-manage_display_manager() {
-    info "Managing Display Managers..."
-    
-    CURRENT_DM_PATH=$(systemctl list-unit-files --type=service | grep "display-manager.service" | awk '{print $1}') || true
-    
-    if [[ -z "$CURRENT_DM_PATH" ]]; then
-        CURRENT_DM=$(systemctl list-units --type=service --state=running | grep -E 'sddm|gdm|lightdm|lxdm' | awk '{print $1}' | head -n 1)
-    else
-        CURRENT_DM=$(basename "$(readlink /etc/systemd/system/display-manager.service)" 2>/dev/null || echo "$CURRENT_DM_PATH")
-    fi
-
-    if [[ -n "$CURRENT_DM" && "$CURRENT_DM" != "getty@tty1.service" ]]; then
-        warn "Detected active Display Manager: $CURRENT_DM"
-        echo -e "${YELLOW}NOTE: Display Manager must be disabled for Game Mode.${NC}"
-        echo -ne "${YELLOW}Disable $CURRENT_DM now? [y/N] ${NC}"
-        read -r confirm_dm
-        
-        if [[ $confirm_dm == [yY] ]]; then
-            systemctl disable "$CURRENT_DM"
-            success "$CURRENT_DM disabled."
-        fi
-    fi
-}
-
-# --- 7. Finalization ---
-finalize() {
-    info "Finalizing system configuration..."
-    systemctl unmask getty@tty1.service
     systemctl daemon-reload
-    systemctl enable getty@tty1.service
-    
-    echo -e "\n${GREEN}==================================================${NC}"
-    success "INSTALLATION COMPLETE!"
-    warn "Please REBOOT to enter Game Mode."
-    echo -e "${GREEN}==================================================${NC}\n"
+    systemctl enable steamos_diy.service
 }
 
 # --- Execution Flow ---
@@ -254,6 +150,8 @@ check_gpu_and_drivers
 install_dependencies
 deploy_files
 setup_shim_links
-setup_bash_profile
-manage_display_manager
+setup_systemd
+finalize() {
+    success "INSTALLATION COMPLETE! Please REBOOT."
+}
 finalize
