@@ -1,15 +1,24 @@
 [Unit]
 Description=SteamMachine-DIY - Session Launcher
 After=systemd-user-sessions.service network.target
+# Ensure the TTY is available by conflicting with the default getty
+Conflicts=getty@tty1.service
 
 [Service]
-User=lelo
+# Dynamically uses the user assigned during installation or service override
+User=%u
 PAMName=login
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-Environment=SSOT_CONF=/etc/default/steamos_diy.conf
 
+# Load the SSoT configuration as environment variables
+EnvironmentFile=/etc/default/steamos_diy.conf
+
+# Set the runtime directory based on the User ID (%U) to stay agnostic
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+
+# Main execution command
 ExecStart=/usr/bin/python3 /usr/local/lib/steamos_diy/session_launch.py
 
+# Resilience settings
 Restart=always
 RestartSec=2
 StandardInput=tty
