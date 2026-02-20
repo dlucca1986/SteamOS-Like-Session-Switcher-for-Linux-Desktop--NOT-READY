@@ -1,0 +1,24 @@
+[Unit]
+Description=SteamMachine-DIY - Session Launcher
+After=systemd-user-sessions.service network.target
+
+[Service]
+User=lelo
+PAMName=login
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=SSOT_CONF=/etc/default/steamos_diy.conf
+
+ExecStart=/usr/bin/python3 /usr/local/lib/steamos_diy/session_launch.py
+
+Restart=always
+RestartSec=2
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVTDisallocate=yes
+KillMode=mixed
+
+[Install]
+WantedBy=graphical.target
