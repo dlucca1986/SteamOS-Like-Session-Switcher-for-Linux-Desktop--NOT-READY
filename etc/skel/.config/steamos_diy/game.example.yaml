@@ -4,7 +4,7 @@
 # DESCRIPTION:  Specific Game Configuration (Overrides Global Defaults)
 # PHILOSOPHY:   KISS (Keep It Simple, Stupid)
 # REPOSITORY:   https://github.com/dlucca1986/SteamMachine-DIY
-# PATH:         $HOME/.config/steamos_diy/games.d/game.examole.yaml
+# PATH:         $HOME/.config/steamos_diy/games.d/game.example.yaml
 # DESTINATION:  Managed by Control Center -> games.d/[GameName].yaml
 # LICENSE:      MIT
 # =============================================================================
